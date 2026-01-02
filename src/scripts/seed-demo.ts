@@ -1,8 +1,8 @@
 import "dotenv/config";
-import { sql, closeConnection } from "../src/db/client.js";
-import { createUser } from "../src/db/queries/users.js";
-import { createCouple, addCoupleMembers } from "../src/db/queries/couples.js";
-import { createThread, addParticipant } from "../src/db/queries/threads.js";
+import { sql, closeConnection } from "../db/client.js";
+import { createUser } from "../db/queries/users.js";
+import { createCouple, addCoupleMembers } from "../db/queries/couples.js";
+import { createThread, addParticipant } from "../db/queries/threads.js";
 
 async function seedDemo() {
   console.log("Seeding demo data...\n");
