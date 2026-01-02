@@ -4,8 +4,8 @@ import { createUser } from "../db/queries/users.js";
 import { createCouple, addCoupleMembers } from "../db/queries/couples.js";
 import { createThread, addParticipant } from "../db/queries/threads.js";
 
-async function seedProd() {
-  console.log("Seeding production data...\n");
+export async function seedProduction(): Promise<void> {
+  console.log("Checking production data...\n");
 
   // Check if production data already exists
   const existingUsers = await sql<{ count: number }[]>`
@@ -14,7 +14,6 @@ async function seedProd() {
 
   if (existingUsers[0].count > 0) {
     console.log("Production data already exists. Skipping seed.");
-    await closeConnection();
     return;
   }
 
@@ -57,11 +56,15 @@ async function seedProd() {
   console.log(`  Shared: ${sharedThread.id}`);
   console.log(`  Blake DM: ${blakeDm.id}`);
   console.log(`  Amanda DM: ${amandaDm.id}`);
-
-  await closeConnection();
 }
 
-seedProd().catch((error) => {
-  console.error("Seed failed:", error);
-  process.exit(1);
-});
+// Run as standalone script
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  seedProduction()
+    .then(() => closeConnection())
+    .catch((error) => {
+      console.error("Seed failed:", error);
+      process.exit(1);
+    });
+}

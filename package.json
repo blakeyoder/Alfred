@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
-    "postbuild": "npm run db:setup",
     "start": "node dist/adapters/telegram/server.js",
     "cli": "tsx src/cli.ts",
     "migrate": "tsx src/db/migrations/migrate.ts",

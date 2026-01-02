@@ -35,7 +35,7 @@ async function applyMigration(name: string, content: string): Promise<void> {
   console.log(`  Applied: ${name}`);
 }
 
-async function migrate(): Promise<void> {
+export async function runMigrations(): Promise<void> {
   console.log("Starting migrations...\n");
 
   await ensureMigrationsTable();
@@ -65,11 +65,15 @@ async function migrate(): Promise<void> {
   } else {
     console.log(`\nApplied ${migrationsRun} migration(s).`);
   }
-
-  await closeConnection();
 }
 
-migrate().catch((error) => {
-  console.error("Migration failed:", error);
-  process.exit(1);
-});
+// Run as standalone script
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  runMigrations()
+    .then(() => closeConnection())
+    .catch((error) => {
+      console.error("Migration failed:", error);
+      process.exit(1);
+    });
+}

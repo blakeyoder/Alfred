@@ -10,6 +10,8 @@ import "dotenv/config";
 import express from "express";
 import { createBot } from "./bot.js";
 import { closeConnection } from "../../db/client.js";
+import { runMigrations } from "../../db/migrations/migrate.js";
+import { seedProduction } from "../../scripts/seed-prod.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -69,6 +71,12 @@ process.once("SIGTERM", () => shutdown("SIGTERM"));
 
 // Start the server
 async function main() {
+  // Run database migrations
+  console.log("Running database setup...\n");
+  await runMigrations();
+  await seedProduction();
+  console.log("\nDatabase ready.\n");
+
   // Set webhook
   console.log(`Setting webhook to ${webhookUrl}...`);
   await bot.telegram.setWebhook(webhookUrl);
