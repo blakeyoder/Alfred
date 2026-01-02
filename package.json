@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp src/db/migrations/*.sql dist/db/migrations/",
     "start": "node dist/adapters/telegram/server.js",
     "cli": "tsx src/cli.ts",
     "migrate": "tsx src/db/migrations/migrate.ts",
