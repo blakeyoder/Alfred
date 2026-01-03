@@ -27,13 +27,16 @@ export function getVoiceAgentId(agentType: VoiceAgentType): string {
   // Try the specific agent first, fall back to general
   const specificAgent = agentIds[agentType];
   if (specificAgent) {
+    console.log(
+      `[elevenlabs] Using ${agentType} agent: ${specificAgent.slice(0, 20)}...`
+    );
     return specificAgent;
   }
 
   const generalAgent = agentIds.general;
   if (generalAgent) {
     console.log(
-      `[elevenlabs] No agent configured for type "${agentType}", using general agent`
+      `[elevenlabs] No agent configured for type "${agentType}", using general agent: ${generalAgent.slice(0, 20)}...`
     );
     return generalAgent;
   }
@@ -42,13 +45,13 @@ export function getVoiceAgentId(agentType: VoiceAgentType): string {
   const legacyAgent = process.env.ELEVENLABS_AGENT_ID;
   if (legacyAgent) {
     console.log(
-      `[elevenlabs] No typed agents configured, using legacy ELEVENLABS_AGENT_ID`
+      `[elevenlabs] No typed agents configured, using legacy ELEVENLABS_AGENT_ID: ${legacyAgent.slice(0, 20)}...`
     );
     return legacyAgent;
   }
 
   throw new Error(
-    `No ElevenLabs agent configured. Set ELEVENLABS_AGENT_GENERAL or ELEVENLABS_AGENT_ID.`
+    `No ElevenLabs agent configured. Set ELEVENLABS_AGENT_${agentType.toUpperCase()} or ELEVENLABS_AGENT_GENERAL.`
   );
 }
 
@@ -124,6 +127,52 @@ function getApiKey(): string {
   return apiKey;
 }
 
+/**
+ * ElevenLabs API error with parsed details
+ */
+export class ElevenLabsApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly errorCode: string | undefined,
+    message: string
+  ) {
+    super(message);
+    this.name = "ElevenLabsApiError";
+  }
+}
+
+/**
+ * Parse ElevenLabs error response and return a user-friendly message
+ */
+function parseErrorResponse(status: number, responseText: string): string {
+  try {
+    const parsed = JSON.parse(responseText);
+    const detail = parsed?.detail;
+
+    // Handle document_not_found (404) - agent or conversation doesn't exist
+    if (
+      status === 404 &&
+      detail?.status === "document_not_found" &&
+      typeof detail?.message === "string"
+    ) {
+      const idMatch = detail.message.match(/agent_[a-z0-9]+/);
+      if (idMatch) {
+        return `Voice agent not found. The configured agent (${idMatch[0]}) may have been deleted. Please run 'bun run src/scripts/setup-elevenlabs-agents.ts' to create new agents and update your .env file.`;
+      }
+      return `ElevenLabs resource not found: ${detail.message}`;
+    }
+
+    // Handle other structured errors
+    if (detail?.message) {
+      return `ElevenLabs error: ${detail.message}`;
+    }
+  } catch {
+    // JSON parsing failed, use raw response
+  }
+
+  return `ElevenLabs API error (${status}): ${responseText}`;
+}
+
 async function makeElevenLabsRequest<TResponse>(
   method: "GET" | "POST",
   endpoint: string,
@@ -146,8 +195,19 @@ async function makeElevenLabsRequest<TResponse>(
   const response = await fetch(`${ELEVENLABS_API_BASE}${endpoint}`, options);
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`ElevenLabs API error (${response.status}): ${error}`);
+    const responseText = await response.text();
+    const message = parseErrorResponse(response.status, responseText);
+
+    // Extract error code from response if available
+    let errorCode: string | undefined;
+    try {
+      const parsed = JSON.parse(responseText);
+      errorCode = parsed?.detail?.status;
+    } catch {
+      // Ignore parsing errors
+    }
+
+    throw new ElevenLabsApiError(response.status, errorCode, message);
   }
 
   return response.json() as Promise<TResponse>;
