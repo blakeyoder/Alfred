@@ -9,7 +9,7 @@
 import "dotenv/config";
 import express from "express";
 import { createBot } from "./bot.js";
-import { closeConnection } from "../../db/client.js";
+import { closeConnection, testConnection } from "../../db/client.js";
 import { runMigrations } from "../../db/migrations/migrate.js";
 import { seedProduction } from "../../scripts/seed-prod.js";
 import {
@@ -53,9 +53,14 @@ app.use(
 // Parse JSON bodies for other webhooks
 app.use(express.json());
 
-// Health check endpoint
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", mode: "webhook" });
+// Health check endpoint (with DB check)
+app.get("/health", async (_req, res) => {
+  const dbOk = await testConnection();
+  if (dbOk) {
+    res.json({ status: "ok", mode: "webhook", db: "ok" });
+  } else {
+    res.status(503).json({ status: "degraded", mode: "webhook", db: "error" });
+  }
 });
 
 // Root endpoint

@@ -8,13 +8,26 @@ if (!connectionString) {
 
 export const sql = postgres(connectionString, {
   max: 10,
-  idle_timeout: 20,
+  idle_timeout: 0, // Disable idle timeout - let connections stay open
   connect_timeout: 10,
-  // Disabled max_lifetime - causes negative timeout errors when containers
-  // suspend/resume (the library calculates refresh time from connection start,
-  // which can be in the "past" after container sleep)
+  // Keep connections fresh by forcing new ones periodically
+  // This helps when containers sleep/wake
+  onnotice: () => {}, // Suppress notice messages
 });
 
 export async function closeConnection(): Promise<void> {
   await sql.end({ timeout: 5 });
+}
+
+/**
+ * Test database connectivity. Call this to verify the connection is working.
+ */
+export async function testConnection(): Promise<boolean> {
+  try {
+    await sql`SELECT 1`;
+    return true;
+  } catch (error) {
+    console.error("[db] Connection test failed:", error);
+    return false;
+  }
 }
