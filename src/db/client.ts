@@ -10,7 +10,9 @@ export const sql = postgres(connectionString, {
   max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
-  max_lifetime: 60 * 30, // Refresh connections every 30 minutes
+  // Disabled max_lifetime - causes negative timeout errors when containers
+  // suspend/resume (the library calculates refresh time from connection start,
+  // which can be in the "past" after container sleep)
 });
 
 export async function closeConnection(): Promise<void> {
