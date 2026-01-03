@@ -18,25 +18,20 @@ export type VoiceAgentType = "restaurant" | "medical" | "general";
  * Falls back to general agent if the specific type is not configured.
  */
 export function getVoiceAgentId(agentType: VoiceAgentType): string {
-  const agentIds: Record<VoiceAgentType, string | undefined> = {
-    restaurant: process.env.ELEVENLABS_AGENT_RESTAURANT,
-    medical: process.env.ELEVENLABS_AGENT_MEDICAL,
-    general: process.env.ELEVENLABS_AGENT_GENERAL,
-  };
+  const envVarName = `ELEVENLABS_AGENT_${agentType.toUpperCase()}`;
+  const specificAgent = process.env[envVarName];
 
-  // Try the specific agent first, fall back to general
-  const specificAgent = agentIds[agentType];
   if (specificAgent) {
     console.log(
-      `[elevenlabs] Using ${agentType} agent: ${specificAgent.slice(0, 20)}...`
+      `[elevenlabs] Using ${envVarName}=${specificAgent}`
     );
     return specificAgent;
   }
 
-  const generalAgent = agentIds.general;
+  const generalAgent = process.env.ELEVENLABS_AGENT_GENERAL;
   if (generalAgent) {
     console.log(
-      `[elevenlabs] No agent configured for type "${agentType}", using general agent: ${generalAgent.slice(0, 20)}...`
+      `[elevenlabs] ${envVarName} not set, falling back to ELEVENLABS_AGENT_GENERAL=${generalAgent}`
     );
     return generalAgent;
   }
@@ -45,13 +40,13 @@ export function getVoiceAgentId(agentType: VoiceAgentType): string {
   const legacyAgent = process.env.ELEVENLABS_AGENT_ID;
   if (legacyAgent) {
     console.log(
-      `[elevenlabs] No typed agents configured, using legacy ELEVENLABS_AGENT_ID: ${legacyAgent.slice(0, 20)}...`
+      `[elevenlabs] No typed agents configured, falling back to ELEVENLABS_AGENT_ID=${legacyAgent}`
     );
     return legacyAgent;
   }
 
   throw new Error(
-    `No ElevenLabs agent configured. Set ELEVENLABS_AGENT_${agentType.toUpperCase()} or ELEVENLABS_AGENT_GENERAL.`
+    `No ElevenLabs agent configured. Set ${envVarName} or ELEVENLABS_AGENT_GENERAL.`
   );
 }
 
