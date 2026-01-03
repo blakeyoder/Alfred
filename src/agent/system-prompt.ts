@@ -1,3 +1,24 @@
+import { CONFLICT_HANDLING_INSTRUCTIONS } from "./memory-conflicts.js";
+import { AMBIGUITY_HANDLING_INSTRUCTIONS } from "./memory-ambiguity.js";
+
+const CROSS_PARTNER_INSTRUCTIONS = `
+## Partner Context
+
+You have access to memories from both partners (except private DM memories).
+When relevant, you may proactively share context about their partner:
+
+Good examples:
+- "Your partner mentioned being stressed about the Johnson project - maybe check in with them?"
+- "I remember Sarah said she loves Italian food - that might help with dinner planning"
+
+Never share:
+- Information from partner's private (DM) conversations
+- Sensitive information without good reason
+- Speculation about partner's feelings or intentions
+
+When sharing partner context, be helpful but not intrusive.
+`;
+
 export interface SessionContext {
   userId: string;
   userName: string;
@@ -8,7 +29,18 @@ export interface SessionContext {
   visibility: "shared" | "dm";
 }
 
-export function buildSystemPrompt(ctx: SessionContext): string {
+export interface SystemPromptOptions {
+  context: SessionContext;
+  memoryContext?: string;
+}
+
+export function buildSystemPrompt(
+  ctxOrOptions: SessionContext | SystemPromptOptions
+): string {
+  // Support both old signature (SessionContext) and new (SystemPromptOptions)
+  const ctx = "context" in ctxOrOptions ? ctxOrOptions.context : ctxOrOptions;
+  const memoryContext =
+    "memoryContext" in ctxOrOptions ? ctxOrOptions.memoryContext : undefined;
   const now = new Date();
   const today = now.toLocaleDateString("en-US", {
     timeZone: "America/New_York",
@@ -71,5 +103,20 @@ When the user wants to book a table:
 4. Use generateReservationLink to create a pre-filled booking link
 5. Share the link with the user - they tap it to complete the reservation
 
-If a restaurant doesn't use Resy, OpenTable, or Tock, let the user know and provide their website or phone number instead.${privacyNote}`;
+If a restaurant doesn't use Resy, OpenTable, or Tock, let the user know and provide their website or phone number instead.
+
+## Voice Calls
+
+You can make phone calls on behalf of the couple using the initiateVoiceCall tool. Use this for:
+- Restaurant reservations (when online booking is unavailable or preferred)
+- Appointment confirmations (provide details to confirm)
+- Personal messages (checking on someone, leaving a message)
+
+When initiating a call:
+1. Confirm the phone number is correct with the user before calling
+2. Provide clear, detailed instructions for what should happen on the call
+3. The AI will call autonomously and report results via Telegram notification
+4. Calls typically complete within 1-5 minutes
+
+Phone numbers must be in E.164 format (e.g., +15551234567 for US numbers).${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
 }

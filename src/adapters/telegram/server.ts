@@ -16,6 +16,11 @@ import {
   startReminderNotifications,
   stopReminderNotifications,
 } from "../../services/reminder-notifications.js";
+import {
+  startVoiceCallNotifications,
+  stopVoiceCallNotifications,
+} from "../../services/voice-call-notifications.js";
+import { handleElevenLabsWebhook } from "../../webhooks/elevenlabs.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -34,7 +39,18 @@ const webhookUrl = `${appUrl}${webhookPath}`;
 const bot = createBot(token);
 const app = express();
 
-// Parse JSON bodies for webhook
+// ElevenLabs webhook needs raw body for signature validation
+// Must be registered BEFORE express.json() middleware
+app.use(
+  "/webhook/elevenlabs",
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as Express.Request & { rawBody?: string }).rawBody = buf.toString();
+    },
+  })
+);
+
+// Parse JSON bodies for other webhooks
 app.use(express.json());
 
 // Health check endpoint
@@ -62,10 +78,19 @@ app.post(webhookPath, async (req, res) => {
   }
 });
 
+// ElevenLabs webhook endpoint for call completion events
+app.post("/webhook/elevenlabs", async (req, res) => {
+  await handleElevenLabsWebhook(
+    req as Parameters<typeof handleElevenLabsWebhook>[0],
+    res
+  );
+});
+
 // Graceful shutdown
 async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down...`);
   stopReminderNotifications();
+  stopVoiceCallNotifications();
   // Don't delete webhook - new instance will set it on startup
   // Deleting here causes a race condition during deploys
   await closeConnection();
@@ -95,8 +120,9 @@ async function main() {
     console.log(`Webhook endpoint: ${webhookUrl}\n`);
   });
 
-  // Start proactive reminder notifications
+  // Start proactive notification services
   startReminderNotifications(bot.telegram);
+  startVoiceCallNotifications(bot.telegram);
 }
 
 main().catch(async (error) => {
