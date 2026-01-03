@@ -42,11 +42,32 @@ export interface SearchResponse {
 
 // ============ Extract API Types ============
 
+/** Internal API request format */
+interface ExtractApiRequest {
+  urls: string[];
+  objective?: string;
+}
+
+/** Single extraction result from the API */
+interface ExtractApiResult {
+  url: string;
+  title: string | null;
+  content: string;
+  extracted_at: string;
+}
+
+/** Internal API response format */
+interface ExtractApiResponse {
+  results: ExtractApiResult[];
+}
+
+/** Public request format (single URL for simplicity) */
 export interface ExtractRequest {
   url: string;
   objective?: string;
 }
 
+/** Public response format (single result) */
 export interface ExtractResponse {
   url: string;
   title: string | null;
@@ -98,7 +119,7 @@ function getApiKey(): string {
 async function makeParallelRequest<TResponse>(
   endpoint: string,
   body: unknown,
-  options: { useBetaHeader?: boolean } = {}
+  options: { useBetaHeader?: boolean } = {},
 ): Promise<TResponse> {
   const apiKey = getApiKey();
 
@@ -140,11 +161,27 @@ export async function search(request: SearchRequest): Promise<SearchResponse> {
  * Returns LLM-ready markdown content.
  */
 export async function extract(
-  request: ExtractRequest
+  request: ExtractRequest,
 ): Promise<ExtractResponse> {
-  return makeParallelRequest<ExtractResponse>("/v1beta/extract", request, {
-    useBetaHeader: true,
-  });
+  // Transform to API format (urls array)
+  const apiRequest: ExtractApiRequest = {
+    urls: [request.url],
+    objective: request.objective,
+  };
+
+  const response = await makeParallelRequest<ExtractApiResponse>(
+    "/v1beta/extract",
+    apiRequest,
+    { useBetaHeader: true },
+  );
+
+  // Return first result (we only requested one URL)
+  const result = response.results[0];
+  if (!result) {
+    throw new Error("No extraction result returned");
+  }
+
+  return result;
 }
 
 /**
@@ -152,7 +189,7 @@ export async function extract(
  * OpenAI ChatCompletions compatible.
  */
 export async function chatWithContext(
-  request: ChatRequest
+  request: ChatRequest,
 ): Promise<ChatResponse> {
   return makeParallelRequest<ChatResponse>("/v1/chat/completions", request);
 }

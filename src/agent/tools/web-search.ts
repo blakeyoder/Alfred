@@ -19,7 +19,7 @@ const webSearchSchema = z.object({
     .optional()
     .describe(
       "Location context (city, zip, or address) if the search is location-specific. " +
-        "Infer from conversation history when possible, or ask the user if needed."
+        "Infer from conversation history when possible, or ask the user if needed.",
     ),
   maxResults: z
     .number()
@@ -36,7 +36,7 @@ const webExtractSchema = z.object({
     .string()
     .optional()
     .describe(
-      "What aspect to focus on extracting (e.g., 'menu and prices', 'hours and location')"
+      "What aspect to focus on extracting (e.g., 'menu and prices', 'hours and location')",
     ),
 });
 
@@ -45,21 +45,80 @@ const webChatSchema = z.object({
     .string()
     .describe(
       "Follow-up question about previous search results. " +
-        "Use when the user wants more details about something already found."
+        "Use when the user wants more details about something already found.",
     ),
   context: z
     .string()
     .describe(
       "Relevant context from previous search results (URLs, excerpts, etc.) " +
-        "to help answer the question accurately."
+        "to help answer the question accurately.",
     ),
 });
+
+// ============ Constants ============
+
+/**
+ * Domains to always exclude from search results.
+ * These sites have low signal-to-noise for recommendations.
+ */
+const EXCLUDED_DOMAINS = ["yelp.com", "tripadvisor.com"];
+
+/**
+ * Preferred sources for restaurant/food queries.
+ * These will be searched explicitly in addition to general results.
+ */
+const RESTAURANT_PREFERRED_SOURCES = ["eater.com", "theinfatuation.com"];
+
+/**
+ * Keywords that indicate a restaurant/food-related query.
+ */
+const RESTAURANT_KEYWORDS = [
+  "restaurant",
+  "restaurants",
+  "food",
+  "dining",
+  "eat",
+  "eating",
+  "dinner",
+  "lunch",
+  "breakfast",
+  "brunch",
+  "cafe",
+  "coffee",
+  "bar",
+  "bars",
+  "pizza",
+  "sushi",
+  "tacos",
+  "burgers",
+  "thai",
+  "italian",
+  "mexican",
+  "chinese",
+  "japanese",
+  "indian",
+  "french",
+  "mediterranean",
+  "steakhouse",
+  "seafood",
+  "vegetarian",
+  "vegan",
+];
+
+function isRestaurantQuery(query: string): boolean {
+  const lowerQuery = query.toLowerCase();
+  return RESTAURANT_KEYWORDS.some(
+    (keyword) =>
+      lowerQuery.includes(keyword) ||
+      lowerQuery.includes(keyword.replace(/s$/, "")),
+  );
+}
 
 // ============ Helper Functions ============
 
 function formatSearchResult(
   result: SearchResult,
-  index: number
+  index: number,
 ): {
   index: number;
   title: string;
@@ -78,7 +137,7 @@ function formatSearchResult(
 
 export function createWebSearchTools(
   _ctx: ToolContext,
-  _partnerId: string | null
+  _partnerId: string | null,
 ) {
   return {
     webSearch: tool({
@@ -92,11 +151,25 @@ export function createWebSearchTools(
           // Enhance query with location if provided
           const objective = location ? `${query} near ${location}` : query;
 
+          // Build search queries - for restaurant queries, add explicit
+          // queries for preferred sources to weight them higher
+          const searchQueries: string[] = [];
+          if (isRestaurantQuery(query)) {
+            for (const source of RESTAURANT_PREFERRED_SOURCES) {
+              searchQueries.push(`site:${source} ${objective}`);
+            }
+          }
+
           const response = await search({
             objective,
+            search_queries:
+              searchQueries.length > 0 ? searchQueries : undefined,
             max_results: maxResults,
             excerpts: {
               max_chars_per_result: 500,
+            },
+            source_policy: {
+              exclude_domains: EXCLUDED_DOMAINS,
             },
           });
 
