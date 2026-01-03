@@ -3,6 +3,7 @@ import { createCalendarTools } from "./calendar.js";
 import { createWebSearchTools } from "./web-search.js";
 import { createReservationTools } from "./reservations.js";
 import { createVoiceCallTools } from "./voice-calls.js";
+import { createSubwayTools } from "./subway.js";
 
 export function createTools(ctx: ToolContext, partnerId: string | null) {
   return {
@@ -11,5 +12,6 @@ export function createTools(ctx: ToolContext, partnerId: string | null) {
     ...createWebSearchTools(ctx, partnerId),
     ...createReservationTools(ctx, partnerId),
     ...createVoiceCallTools(ctx, partnerId),
+    ...createSubwayTools(ctx, partnerId),
   };
 }

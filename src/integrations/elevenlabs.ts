@@ -145,7 +145,10 @@ async function makeElevenLabsRequest<TResponse>(
 
   console.log(`[elevenlabs] ${method} ${endpoint}`);
   if (body) {
-    console.log(`[elevenlabs] Request body:`, JSON.stringify(body).slice(0, 500));
+    console.log(
+      `[elevenlabs] Request body:`,
+      JSON.stringify(body).slice(0, 500)
+    );
   }
 
   const startTime = Date.now();
@@ -161,7 +164,10 @@ async function makeElevenLabsRequest<TResponse>(
   }
 
   const json = await response.json();
-  console.log(`[elevenlabs] Response body:`, JSON.stringify(json).slice(0, 500));
+  console.log(
+    `[elevenlabs] Response body:`,
+    JSON.stringify(json).slice(0, 500)
+  );
   return json as TResponse;
 }
 

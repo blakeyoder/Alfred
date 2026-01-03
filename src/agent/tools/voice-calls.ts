@@ -66,7 +66,9 @@ export function createVoiceCallTools(
   return {
     initiateVoiceCall: tool({
       description:
-        "Initiate an AI-powered phone call to make reservations, confirm appointments, or deliver messages. " +
+        "Initiate an AI-powered phone call on behalf of the user. Use this for ANY phone-related request including: " +
+        "making reservations, booking appointments, asking questions (hours, availability, pricing), " +
+        "confirming details, or delivering messages. When the user says 'call them' or asks you to call somewhere, use this tool. " +
         "The AI will handle the conversation autonomously and report back when complete.",
       inputSchema: initiateVoiceCallSchema,
       execute: async ({
@@ -93,7 +95,9 @@ export function createVoiceCallTools(
           console.log(`[voice-call] Using agent ID: ${agentId}`);
 
           // Get user info for dynamic variables
-          console.log(`[voice-call] Fetching user info for ${ctx.session.userId}...`);
+          console.log(
+            `[voice-call] Fetching user info for ${ctx.session.userId}...`
+          );
           const user = await getUserById(ctx.session.userId);
           console.log(`[voice-call] User: ${user?.name ?? "unknown"}`);
           const userName = user?.name ?? "your assistant";
@@ -159,7 +163,9 @@ export function createVoiceCallTools(
           console.log(`[voice-call] API response:`, JSON.stringify(response));
 
           if (!response.success || !response.conversation_id) {
-            console.log(`[voice-call] API returned failure or no conversation_id`);
+            console.log(
+              `[voice-call] API returned failure or no conversation_id`
+            );
             // API returned failure - mark record as failed
             const errorMessage =
               response.message || "No conversation ID returned";
@@ -172,7 +178,9 @@ export function createVoiceCallTools(
           }
 
           // Update record with ElevenLabs IDs
-          console.log(`[voice-call] Updating database with conversation_id: ${response.conversation_id}`);
+          console.log(
+            `[voice-call] Updating database with conversation_id: ${response.conversation_id}`
+          );
           await updateVoiceCallInitiated(
             voiceCall.id,
             response.conversation_id,

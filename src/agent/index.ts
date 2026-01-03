@@ -69,7 +69,9 @@ export async function chat(
   console.log(`[agent] Tools available: ${Object.keys(tools).join(", ")}`);
 
   try {
-    console.log(`[agent] Calling generateText with message: "${message.slice(0, 100)}..."`);
+    console.log(
+      `[agent] Calling generateText with message: "${message.slice(0, 100)}..."`
+    );
     const result = await generateText({
       model: openai("gpt-4o"),
       system: buildSystemPrompt({ context, memoryContext }),
@@ -101,7 +103,9 @@ export async function chat(
       },
     });
 
-    console.log(`[agent] generateText completed. Steps: ${result.steps.length}, Text length: ${result.text.length}`);
+    console.log(
+      `[agent] generateText completed. Steps: ${result.steps.length}, Text length: ${result.text.length}`
+    );
 
     // Check for tool errors in steps
     for (const step of result.steps) {

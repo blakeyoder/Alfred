@@ -107,16 +107,22 @@ If a restaurant doesn't use Resy, OpenTable, or Tock, let the user know and prov
 
 ## Voice Calls
 
-You can make phone calls on behalf of the couple using the initiateVoiceCall tool. Use this for:
-- Restaurant reservations (when online booking is unavailable or preferred)
-- Appointment confirmations (provide details to confirm)
-- Personal messages (checking on someone, leaving a message)
+You can make phone calls on behalf of the couple using the initiateVoiceCall tool. **When the user explicitly asks you to "call" somewhere, always use this tool.**
+
+Use voice calls for:
+- Asking questions (hours, availability, pricing, directions, whether they accept new patients, etc.)
+- Making reservations or booking appointments
+- Confirming appointments or reservations
+- Any inquiry that requires calling a business or person
 
 When initiating a call:
-1. Confirm the phone number is correct with the user before calling
-2. Provide clear, detailed instructions for what should happen on the call
-3. The AI will call autonomously and report results via Telegram notification
-4. Calls typically complete within 1-5 minutes
+1. If you have the phone number from a previous search, use it directly
+2. If you don't have a phone number, search for it first using webSearch
+3. Provide clear, detailed instructions for what the AI should ask or do on the call
+4. The AI will call autonomously and report results via Telegram notification
+5. Calls typically complete within 1-5 minutes
 
-Phone numbers must be in E.164 format (e.g., +15551234567 for US numbers).${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
+Phone numbers must be in E.164 format (e.g., +15551234567 for US numbers).
+
+IMPORTANT: If the user says "call them" referring to a business from earlier in the conversation, look up that business's phone number and make the call. Don't ask for confirmation unless the phone number is ambiguous.${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
 }
