@@ -16,11 +16,7 @@ import {
   setTelegramGroupId,
 } from "../../db/queries/couples.js";
 import { getThreadsForUser } from "../../db/queries/threads.js";
-import {
-  getRecentMessagesForContext,
-  saveMessage,
-  Message,
-} from "../../db/queries/messages.js";
+import { getRecentMessagesForContext, saveMessage, Message } from "../../db/queries/messages.js";
 import { getUserById } from "../../db/queries/users.js";
 import {
   initiateDeviceFlow,
@@ -39,9 +35,7 @@ function dbMessageToModelMessage(msg: Message): ModelMessage {
 }
 
 // Build session context for a user
-async function buildSessionContext(
-  userId: string
-): Promise<{
+async function buildSessionContext(userId: string): Promise<{
   context: SessionContext;
   partnerId: string | null;
   threadId: string;
@@ -142,9 +136,7 @@ export function createBot(token: string): Telegraf {
     const email = args[0]?.toLowerCase().trim();
 
     if (!email) {
-      await ctx.reply(
-        "Usage: /link <your-email>\n\nExample: /link blake@example.com"
-      );
+      await ctx.reply("Usage: /link <your-email>\n\nExample: /link blake@example.com");
       return;
     }
 
@@ -214,22 +206,12 @@ export function createBot(token: string): Telegraf {
       );
 
       // Poll for completion (with timeout)
-      const tokens = await completeDeviceFlow(
-        flow.deviceCode,
-        flow.interval,
-        flow.expiresIn
-      );
+      const tokens = await completeDeviceFlow(flow.deviceCode, flow.interval, flow.expiresIn);
 
       const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
       const scopes = tokens.scope.split(" ");
 
-      await storeTokens(
-        user.id,
-        tokens.access_token,
-        tokens.refresh_token,
-        expiresAt,
-        scopes
-      );
+      await storeTokens(user.id, tokens.access_token, tokens.refresh_token, expiresAt, scopes);
 
       await ctx.reply(
         "Google Calendar connected successfully!\n\n" +
@@ -327,8 +309,7 @@ export function createBot(token: string): Telegraf {
           await ctx.reply(`Shared calendar:\n${currentShared}`);
         } else {
           await ctx.reply(
-            "No shared calendar configured.\n\n" +
-              "Use /calendar list to see available calendars."
+            "No shared calendar configured.\n\n" + "Use /calendar list to see available calendars."
           );
         }
         break;
@@ -400,18 +381,14 @@ export function createBot(token: string): Telegraf {
     // Get the user's couple
     const couple = await getCoupleForUser(user.id);
     if (!couple) {
-      await ctx.reply(
-        "You're not part of a couple yet. Contact support to get set up."
-      );
+      await ctx.reply("You're not part of a couple yet. Contact support to get set up.");
       return;
     }
 
     // Check if this group is already linked to another couple
     const existingCouple = await getCoupleByGroupId(groupId);
     if (existingCouple && existingCouple.id !== couple.id) {
-      await ctx.reply(
-        "This group is already linked to a different couple."
-      );
+      await ctx.reply("This group is already linked to a different couple.");
       return;
     }
 
@@ -476,8 +453,7 @@ export function createBot(token: string): Telegraf {
       if (!couple) {
         // Group not set up - prompt to set up
         await ctx.reply(
-          "This group isn't set up yet.\n\n" +
-            "Run /setup to link this group to your couple."
+          "This group isn't set up yet.\n\n" + "Run /setup to link this group to your couple."
         );
         return;
       }
@@ -493,9 +469,7 @@ export function createBot(token: string): Telegraf {
     // Build session context
     const session = await buildSessionContext(user.id);
     if (!session) {
-      await ctx.reply(
-        "Unable to find your couple. Make sure you're set up in the system."
-      );
+      await ctx.reply("Unable to find your couple. Make sure you're set up in the system.");
       return;
     }
 
@@ -509,10 +483,7 @@ export function createBot(token: string): Telegraf {
       await ctx.sendChatAction("typing");
 
       // Load conversation history
-      const dbMessages = await getRecentMessagesForContext(
-        session.threadId,
-        50
-      );
+      const dbMessages = await getRecentMessagesForContext(session.threadId, 50);
       const history: ModelMessage[] = dbMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map(dbMessageToModelMessage);
@@ -555,8 +526,20 @@ export function createBot(token: string): Telegraf {
     }
   });
 
-  // Handle non-text messages
+  // Handle non-text messages (but ignore service messages like member joins/leaves)
   bot.on("message", async (ctx) => {
+    // Ignore service messages (member added/removed, etc.)
+    if (
+      "new_chat_members" in ctx.message ||
+      "left_chat_member" in ctx.message ||
+      "new_chat_title" in ctx.message ||
+      "new_chat_photo" in ctx.message ||
+      "delete_chat_photo" in ctx.message ||
+      "group_chat_created" in ctx.message
+    ) {
+      return;
+    }
+
     await ctx.reply(
       "I can only process text messages right now. Send me a text message!"
     );

@@ -42,9 +42,7 @@ export async function runMigrations(): Promise<void> {
   const applied = await getAppliedMigrations();
 
   const files = await readdir(__dirname);
-  const sqlFiles = files
-    .filter((f) => f.endsWith(".sql"))
-    .sort((a, b) => a.localeCompare(b));
+  const sqlFiles = files.filter((f) => f.endsWith(".sql")).sort((a, b) => a.localeCompare(b));
 
   let migrationsRun = 0;
 

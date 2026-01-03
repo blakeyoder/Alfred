@@ -69,16 +69,9 @@ export function handleDbError(error: unknown): never {
       case "CONNECT_TIMEOUT":
         throw new DatabaseError("Database connection timed out", error.code);
       case "CONNECTION_CLOSED":
-        throw new DatabaseError(
-          "Database connection closed unexpectedly",
-          error.code
-        );
+        throw new DatabaseError("Database connection closed unexpectedly", error.code);
       default:
-        throw new DatabaseError(
-          `Database error: ${error.message}`,
-          error.code,
-          error.detail
-        );
+        throw new DatabaseError(`Database error: ${error.message}`, error.code, error.detail);
     }
   }
   throw error;

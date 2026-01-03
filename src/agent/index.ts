@@ -24,10 +24,7 @@ export interface ChatResult {
   };
 }
 
-export async function chat(
-  message: string,
-  options: ChatOptions
-): Promise<ChatResult> {
+export async function chat(message: string, options: ChatOptions): Promise<ChatResult> {
   const { context, history, partnerId = null } = options;
 
   const tools = createTools({ session: context }, partnerId);
@@ -47,7 +44,7 @@ export async function chat(
           parallelToolCalls: true,
         },
       },
-      onStepFinish: async ({ toolCalls, toolResults, finishReason }) => {
+      onStepFinish: async ({ toolResults }) => {
         if (toolResults && toolResults.length > 0) {
           for (const toolResult of toolResults) {
             console.log(`[Agent] Tool: ${toolResult.toolName}`, toolResult.output);
@@ -60,14 +57,10 @@ export async function chat(
     for (const step of result.steps) {
       if (step.content) {
         const toolErrors = step.content.filter(
-          (part): part is Extract<typeof part, { type: "tool-error" }> =>
-            part.type === "tool-error"
+          (part): part is Extract<typeof part, { type: "tool-error" }> => part.type === "tool-error"
         );
         for (const toolError of toolErrors) {
-          console.warn(
-            `[Agent] Tool error in ${toolError.toolName}:`,
-            toolError.error
-          );
+          console.warn(`[Agent] Tool error in ${toolError.toolName}:`, toolError.error);
         }
       }
     }
@@ -86,15 +79,11 @@ export async function chat(
       throw new Error(`AI tried to use an unknown tool: ${error.toolName}`);
     }
     if (InvalidToolInputError.isInstance(error)) {
-      throw new Error(
-        `AI provided invalid inputs for tool ${error.toolName}: ${error.message}`
-      );
+      throw new Error(`AI provided invalid inputs for tool ${error.toolName}: ${error.message}`);
     }
     if (APICallError.isInstance(error)) {
       if (error.statusCode === 429) {
-        throw new Error(
-          "Rate limited by OpenAI. Please try again in a moment."
-        );
+        throw new Error("Rate limited by OpenAI. Please try again in a moment.");
       }
       throw new Error(`OpenAI API error (${error.statusCode}): ${error.message}`);
     }

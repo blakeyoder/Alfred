@@ -5,10 +5,7 @@
  * to the couple's Telegram group chat.
  */
 import type { Telegram } from "telegraf";
-import {
-  getRemindersToNotify,
-  markReminderNotified,
-} from "../db/queries/reminders.js";
+import { getRemindersToNotify, markReminderNotified } from "../db/queries/reminders.js";
 import { getCoupleById } from "../db/queries/couples.js";
 import { getUserById } from "../db/queries/users.js";
 
@@ -64,11 +61,7 @@ async function checkAndNotify(telegram: Telegram): Promise<void> {
       }
 
       // Format and send the message
-      const message = formatNotificationMessage(
-        reminder.title,
-        reminder.due_at!,
-        assigneeName
-      );
+      const message = formatNotificationMessage(reminder.title, reminder.due_at!, assigneeName);
 
       try {
         await telegram.sendMessage(couple.telegram_group_id, message, {
@@ -79,10 +72,7 @@ async function checkAndNotify(telegram: Telegram): Promise<void> {
         await markReminderNotified(reminder.id);
         console.log(`Sent notification for reminder: ${reminder.title}`);
       } catch (sendError) {
-        console.error(
-          `Failed to send notification for reminder ${reminder.id}:`,
-          sendError
-        );
+        console.error(`Failed to send notification for reminder ${reminder.id}:`, sendError);
         // Don't mark as notified, will retry on next poll
       }
     }

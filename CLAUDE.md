@@ -22,11 +22,26 @@ bun run seed:demo    # Create demo users and data
 ```sh
 # 1. Make changes
 
-# 2. Typecheck (fast)
+# 2. Format code
+bun run format
+
+# 3. Lint (fix issues automatically)
+bun run lint:fix
+
+# 4. Typecheck
 bun run typecheck
 
-# 3. Build before deploying
+# 5. Build before deploying
 bun run build
+```
+
+### Linting & Formatting
+
+```bash
+bun run format        # Format all files with Prettier
+bun run format:check  # Check formatting without writing
+bun run lint          # Check for ESLint errors
+bun run lint:fix      # Fix ESLint errors automatically
 ```
 
 ## Architecture

@@ -52,9 +52,7 @@ async function makeCalendarRequest<T>(
 ): Promise<T> {
   const accessToken = await getValidAccessToken(userId);
   if (!accessToken) {
-    throw new Error(
-      "Not authenticated with Google. Use /auth google to connect."
-    );
+    throw new Error("Not authenticated with Google. Use /auth google to connect.");
   }
 
   const url = `${CALENDAR_API_BASE}${endpoint}`;
@@ -183,10 +181,7 @@ export async function findFreeTime(
     const start = new Date(period.start);
     const end = new Date(period.end);
 
-    if (
-      mergedBusy.length > 0 &&
-      start <= mergedBusy[mergedBusy.length - 1].end
-    ) {
+    if (mergedBusy.length > 0 && start <= mergedBusy[mergedBusy.length - 1].end) {
       // Extend the last period
       mergedBusy[mergedBusy.length - 1].end = new Date(
         Math.max(mergedBusy[mergedBusy.length - 1].end.getTime(), end.getTime())
@@ -228,9 +223,7 @@ export async function findFreeTime(
         }
       }
     }
-    currentTime = new Date(
-      Math.max(currentTime.getTime(), busy.end.getTime())
-    );
+    currentTime = new Date(Math.max(currentTime.getTime(), busy.end.getTime()));
   }
 
   // Check remaining time after last busy period
@@ -258,12 +251,8 @@ export async function findFreeTime(
  */
 export function formatEvents(events: CalendarEvent[]): string[] {
   return events.map((e) => {
-    const startTime = e.start.dateTime
-      ? new Date(e.start.dateTime).toLocaleString()
-      : e.start.date;
-    const endTime = e.end.dateTime
-      ? new Date(e.end.dateTime).toLocaleTimeString()
-      : "";
+    const startTime = e.start.dateTime ? new Date(e.start.dateTime).toLocaleString() : e.start.date;
+    const endTime = e.end.dateTime ? new Date(e.end.dateTime).toLocaleTimeString() : "";
 
     return `${startTime}${endTime ? ` - ${endTime}` : ""}: ${e.summary}`;
   });
@@ -285,9 +274,7 @@ export async function listCalendars(
   const calendars = response.items || [];
 
   if (writableOnly) {
-    return calendars.filter(
-      (cal) => cal.accessRole === "writer" || cal.accessRole === "owner"
-    );
+    return calendars.filter((cal) => cal.accessRole === "writer" || cal.accessRole === "owner");
   }
 
   return calendars;
