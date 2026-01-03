@@ -639,11 +639,14 @@ export function createBot(token: string): Telegraf {
         .map(dbMessageToModelMessage);
 
       // Call the agent
+      console.log(`[bot] Calling chat() for user ${user.id}...`);
+      const chatStartTime = Date.now();
       const result = await chat(messageText, {
         context: session.context,
         history,
         partnerId: session.partnerId,
       });
+      console.log(`[bot] chat() completed in ${Date.now() - chatStartTime}ms`);
 
       // Stop typing indicator
       clearInterval(typingInterval);
@@ -672,7 +675,7 @@ export function createBot(token: string): Telegraf {
       }
     } catch (error) {
       if (typingInterval) clearInterval(typingInterval);
-      console.error("Error processing message:", error);
+      console.error("[bot] Error processing message:", error);
 
       if (error instanceof Error) {
         await ctx.reply(`Sorry, something went wrong: ${error.message}`);

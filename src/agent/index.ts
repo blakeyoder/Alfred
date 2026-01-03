@@ -101,6 +101,8 @@ export async function chat(
       },
     });
 
+    console.log(`[agent] generateText completed. Steps: ${result.steps.length}, Text length: ${result.text.length}`);
+
     // Check for tool errors in steps
     for (const step of result.steps) {
       if (step.content) {
@@ -157,6 +159,7 @@ export async function chat(
         : undefined,
     };
   } catch (error) {
+    console.error(`[agent] Error in generateText:`, error);
     if (NoSuchToolError.isInstance(error)) {
       throw new Error(`AI tried to use an unknown tool: ${error.toolName}`);
     }
@@ -176,6 +179,7 @@ export async function chat(
       );
     }
     if (error instanceof Error && error.name === "AbortError") {
+      console.error(`[agent] Request timed out after 60s`);
       throw new Error("Request timed out. Please try again.");
     }
     throw error;
