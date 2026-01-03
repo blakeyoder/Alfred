@@ -18,7 +18,6 @@ import {
   formatMemoriesForPrompt,
   buildMemoryMetadata,
   shouldRetrieveMemories,
-  shouldStoreMemory,
   type Mem0Memory,
 } from "./memory-privacy.js";
 
@@ -123,24 +122,21 @@ export async function chat(
       }
     }
 
-    // Only store to memory if message contains durable personal information
-    // Skip ephemeral requests like bookings, reminders, calendar events
-    const toolNames = allToolCalls.map((tc) => tc.toolName);
-    if (shouldStoreMemory(message, toolNames)) {
-      try {
-        const metadata = buildMemoryMetadata(context);
-        await storeMemories(
-          [
-            { role: "user", content: message },
-            { role: "assistant", content: result.text },
-          ],
-          context.coupleId,
-          metadata
-        );
-      } catch (error) {
-        // Log but don't fail the response - mem0 might be unavailable
-        console.error("[agent] Failed to store memories:", error);
-      }
+    // Send conversation to mem0 for memory extraction
+    // mem0 uses includes/excludes/custom_instructions to filter what gets stored
+    try {
+      const metadata = buildMemoryMetadata(context);
+      await storeMemories(
+        [
+          { role: "user", content: message },
+          { role: "assistant", content: result.text },
+        ],
+        context.coupleId,
+        metadata
+      );
+    } catch (error) {
+      // Log but don't fail the response - mem0 might be unavailable
+      console.error("[agent] Failed to store memories:", error);
     }
 
     return {
