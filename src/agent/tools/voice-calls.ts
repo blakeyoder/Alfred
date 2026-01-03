@@ -77,9 +77,18 @@ export function createVoiceCallTools(
         instructions,
         dynamicVariables,
       }) => {
+        console.log(
+          `[voice-call] Tool invoked: ${agentType} call to ${toName} at ${toNumber}`
+        );
+        console.log(`[voice-call] Purpose: ${callPurpose}`);
+        console.log(
+          `[voice-call] Instructions: ${instructions.slice(0, 100)}...`
+        );
+
         try {
           const phoneNumberId = getPhoneNumberId();
           const agentId = getVoiceAgentId(agentType);
+          console.log(`[voice-call] Using agent ID: ${agentId}`);
 
           // Get user info for dynamic variables
           const user = await getUserById(ctx.session.userId);
@@ -129,6 +138,7 @@ export function createVoiceCallTools(
             // API call failed - mark record as failed
             const errorMessage =
               apiError instanceof Error ? apiError.message : "Unknown error";
+            console.error(`[voice-call] API error: ${errorMessage}`);
             await updateVoiceCallFailed(voiceCall.id, errorMessage);
             return {
               success: false,
@@ -136,6 +146,8 @@ export function createVoiceCallTools(
               callId: voiceCall.id,
             };
           }
+
+          console.log(`[voice-call] API response:`, JSON.stringify(response));
 
           if (!response.success || !response.conversation_id) {
             // API returned failure - mark record as failed

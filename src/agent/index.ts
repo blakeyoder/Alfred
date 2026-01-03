@@ -82,11 +82,20 @@ export async function chat(
           parallelToolCalls: true,
         },
       },
-      onStepFinish: async ({ toolResults }) => {
+      onStepFinish: async ({ toolCalls, toolResults }) => {
+        if (toolCalls && toolCalls.length > 0) {
+          for (const tc of toolCalls) {
+            const args = "args" in tc ? tc.args : undefined;
+            console.log(
+              `[Agent] Calling tool: ${tc.toolName}`,
+              JSON.stringify(args)
+            );
+          }
+        }
         if (toolResults && toolResults.length > 0) {
           for (const toolResult of toolResults) {
             console.log(
-              `[Agent] Tool: ${toolResult.toolName}`,
+              `[Agent] Tool result: ${toolResult.toolName}`,
               toolResult.output
             );
           }
