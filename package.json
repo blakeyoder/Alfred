@@ -14,7 +14,11 @@
     "db:setup": "bun run migrate:prod && bun run seed:prod",
     "typecheck": "tsc --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
-    "knip": "knip"
+    "knip": "knip",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
   },
   "keywords": [
     "ai",
@@ -25,19 +29,27 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
     "jest": "^30.2.0",
     "knip": "^5.79.0",
+    "prettier": "^3.7.4",
     "ts-jest": "^29.4.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.51.0"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.2",
     "ai": "^6.0.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "mem0ai": "^2.2.0",
     "postgres": "^3.4.7",
     "telegraf": "^4.16.3",
     "zod": "^4.3.4"
