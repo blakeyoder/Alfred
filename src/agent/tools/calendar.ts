@@ -8,6 +8,7 @@ import {
 } from "../../integrations/google-calendar.js";
 import { hasGoogleAuth } from "../../integrations/google-auth.js";
 import { getSharedCalendarId } from "../../db/queries/couples.js";
+import { storeMemories } from "../../integrations/mem0-provider.js";
 import type { ToolContext } from "./reminders.js";
 
 const getCalendarEventsSchema = z.object({
@@ -40,6 +41,65 @@ const createCalendarEventSchema = z.object({
     ),
 });
 
+/**
+ * Extract memorable information from calendar event titles
+ * Uses mem0 provider for storage
+ */
+async function extractCalendarMemories(
+  title: string,
+  ctx: ToolContext
+): Promise<void> {
+  // Extract meeting context from title patterns
+  const meetingPatterns = [
+    { pattern: /meeting with (.+)/i, type: "meeting" as const },
+    { pattern: /call with (.+)/i, type: "call" as const },
+    { pattern: /appointment with (.+)/i, type: "appointment" as const },
+    { pattern: /(.+) appointment/i, type: "appointment" as const },
+    { pattern: /lunch with (.+)/i, type: "lunch" as const },
+    { pattern: /dinner with (.+)/i, type: "dinner" as const },
+    { pattern: /(.+) birthday/i, type: "birthday" as const },
+  ];
+
+  for (const { pattern, type } of meetingPatterns) {
+    const match = title.match(pattern);
+    if (match) {
+      const person = match[1].trim();
+      // Skip generic terms
+      if (
+        !["doctor", "dentist", "therapist", "vet", "the"].includes(
+          person.toLowerCase()
+        )
+      ) {
+        const content =
+          type === "birthday"
+            ? `${person}'s birthday is an important date`
+            : `Has ${type} scheduled with ${person}`;
+        const category = type === "birthday" ? "relationship" : "context";
+
+        try {
+          // Store via mem0 provider with metadata
+          await storeMemories(
+            [
+              { role: "user", content: `Created calendar event: ${title}` },
+              { role: "assistant", content: `I'll remember: ${content}` },
+            ],
+            ctx.session.coupleId,
+            {
+              user_id: ctx.session.userId,
+              source_thread_id: ctx.session.threadId,
+              source_visibility: ctx.session.visibility,
+              category,
+            }
+          );
+        } catch (error) {
+          console.error("[calendar] Failed to store memory:", error);
+        }
+      }
+      break;
+    }
+  }
+}
+
 export function createCalendarTools(
   ctx: ToolContext,
   partnerId: string | null
@@ -51,7 +111,9 @@ export function createCalendarTools(
       inputSchema: getCalendarEventsSchema,
       execute: async ({ startDate, endDate }) => {
         // Get the shared calendar ID for the couple
-        const sharedCalendarId = await getSharedCalendarId(ctx.session.coupleId);
+        const sharedCalendarId = await getSharedCalendarId(
+          ctx.session.coupleId
+        );
 
         if (!sharedCalendarId) {
           return {
@@ -117,7 +179,8 @@ export function createCalendarTools(
         if (!hasAuth1 || !hasAuth2) {
           const missing = [];
           if (!hasAuth1) missing.push("You");
-          if (!hasAuth2) missing.push(ctx.session.partnerName ?? "Your partner");
+          if (!hasAuth2)
+            missing.push(ctx.session.partnerName ?? "Your partner");
 
           return {
             success: false,
@@ -156,7 +219,9 @@ export function createCalendarTools(
           return {
             success: false,
             message:
-              error instanceof Error ? error.message : "Failed to find free time",
+              error instanceof Error
+                ? error.message
+                : "Failed to find free time",
             freeSlots: [],
           };
         }
@@ -210,6 +275,11 @@ export function createCalendarTools(
                 location,
               },
               sharedCalendarId
+            );
+
+            // Extract memories from calendar event (fire and forget)
+            extractCalendarMemories(title, ctx).catch((err) =>
+              console.error("[calendar] Memory extraction failed:", err)
             );
 
             return {
@@ -286,6 +356,13 @@ export function createCalendarTools(
               endTime,
               location,
             });
+
+            // Extract memories from calendar event (fire and forget, only for current user)
+            if (isCurrentUser) {
+              extractCalendarMemories(title, ctx).catch((err) =>
+                console.error("[calendar] Memory extraction failed:", err)
+              );
+            }
 
             results.push({
               user: userName,

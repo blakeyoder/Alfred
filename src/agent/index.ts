@@ -9,6 +9,17 @@ import {
 import { openai } from "@ai-sdk/openai";
 import { buildSystemPrompt, type SessionContext } from "./system-prompt.js";
 import { createTools } from "./tools/index.js";
+import {
+  searchMemoriesForCouple,
+  storeMemories,
+} from "../integrations/mem0-provider.js";
+import {
+  filterMemoriesForContext,
+  formatMemoriesForPrompt,
+  buildMemoryMetadata,
+  shouldRetrieveMemories,
+  type Mem0Memory,
+} from "./memory-privacy.js";
 
 export interface ChatOptions {
   context: SessionContext;
@@ -34,12 +45,32 @@ export async function chat(
 ): Promise<ChatResult> {
   const { context, history, partnerId = null } = options;
 
+  // Retrieve memories from mem0 and apply privacy filtering
+  let memoryContext = "";
+  if (shouldRetrieveMemories(message)) {
+    try {
+      const rawMemories = await searchMemoriesForCouple(
+        message,
+        context.coupleId,
+        15
+      );
+      const filteredMemories = filterMemoriesForContext(
+        rawMemories as Mem0Memory[],
+        context
+      );
+      memoryContext = formatMemoriesForPrompt(filteredMemories);
+    } catch (error) {
+      // Log but don't fail the request - mem0 might be unavailable
+      console.error("[agent] Failed to retrieve memories:", error);
+    }
+  }
+
   const tools = createTools({ session: context }, partnerId);
 
   try {
     const result = await generateText({
       model: openai("gpt-4o"),
-      system: buildSystemPrompt(context),
+      system: buildSystemPrompt({ context, memoryContext }),
       messages: [...history, { role: "user", content: message }],
       tools,
       stopWhen: stepCountIs(5),
@@ -51,10 +82,13 @@ export async function chat(
           parallelToolCalls: true,
         },
       },
-      onStepFinish: async ({ toolCalls, toolResults, finishReason }) => {
+      onStepFinish: async ({ toolResults }) => {
         if (toolResults && toolResults.length > 0) {
           for (const toolResult of toolResults) {
-            console.log(`[Agent] Tool: ${toolResult.toolName}`, toolResult.output);
+            console.log(
+              `[Agent] Tool: ${toolResult.toolName}`,
+              toolResult.output
+            );
           }
         }
       },
@@ -88,6 +122,23 @@ export async function chat(
       }
     }
 
+    // Store conversation for memory extraction via mem0 provider
+    // The provider handles extraction automatically
+    try {
+      const metadata = buildMemoryMetadata(context);
+      await storeMemories(
+        [
+          { role: "user", content: message },
+          { role: "assistant", content: result.text },
+        ],
+        context.coupleId,
+        metadata
+      );
+    } catch (error) {
+      // Log but don't fail the response - mem0 might be unavailable
+      console.error("[agent] Failed to store memories:", error);
+    }
+
     return {
       text: result.text,
       toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
@@ -113,7 +164,9 @@ export async function chat(
           "Rate limited by OpenAI. Please try again in a moment."
         );
       }
-      throw new Error(`OpenAI API error (${error.statusCode}): ${error.message}`);
+      throw new Error(
+        `OpenAI API error (${error.statusCode}): ${error.message}`
+      );
     }
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("Request timed out. Please try again.");
