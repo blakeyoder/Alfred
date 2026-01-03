@@ -555,8 +555,20 @@ export function createBot(token: string): Telegraf {
     }
   });
 
-  // Handle non-text messages
+  // Handle non-text messages (but ignore service messages like member joins/leaves)
   bot.on("message", async (ctx) => {
+    // Ignore service messages (member added/removed, etc.)
+    if (
+      "new_chat_members" in ctx.message ||
+      "left_chat_member" in ctx.message ||
+      "new_chat_title" in ctx.message ||
+      "new_chat_photo" in ctx.message ||
+      "delete_chat_photo" in ctx.message ||
+      "group_chat_created" in ctx.message
+    ) {
+      return;
+    }
+
     await ctx.reply(
       "I can only process text messages right now. Send me a text message!"
     );
