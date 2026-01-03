@@ -5,6 +5,7 @@ export interface User {
   email: string;
   name: string;
   google_id: string | null;
+  phone_number: string | null;
   created_at: Date;
 }
 
@@ -26,4 +27,17 @@ export async function createUser(
     RETURNING *
   `;
   return rows[0];
+}
+
+export async function updateUserPhoneNumber(
+  userId: string,
+  phoneNumber: string
+): Promise<User | null> {
+  const rows = await sql<User[]>`
+    UPDATE users
+    SET phone_number = ${phoneNumber}
+    WHERE id = ${userId}
+    RETURNING *
+  `;
+  return rows[0] ?? null;
 }

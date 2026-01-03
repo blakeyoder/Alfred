@@ -201,14 +201,17 @@ async function listVoices(): Promise<Voice[]> {
 async function createAgent(config: AgentConfig): Promise<string> {
   const apiKey = getApiKey();
 
-  const response = await fetch(`${ELEVENLABS_API_BASE}/v1/convai/agents/create`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(config),
-  });
+  const response = await fetch(
+    `${ELEVENLABS_API_BASE}/v1/convai/agents/create`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(config),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -222,7 +225,14 @@ async function createAgent(config: AgentConfig): Promise<string> {
 function findBritishVoice(voices: Voice[]): Voice | null {
   // Priority order for finding British voices
   const britishKeywords = ["british", "uk", "england", "english"];
-  const preferredNames = ["george", "charlotte", "harry", "emily", "james", "daniel"];
+  const preferredNames = [
+    "george",
+    "charlotte",
+    "harry",
+    "emily",
+    "james",
+    "daniel",
+  ];
 
   // First, try to find a voice with British accent label
   for (const voice of voices) {
@@ -267,7 +277,9 @@ async function main() {
       console.log(`     - ${voice.name} (${voice.voice_id})`);
     }
   } else {
-    console.log("   No explicitly British voices found, will select best match");
+    console.log(
+      "   No explicitly British voices found, will select best match"
+    );
   }
 
   // Select voice to use
@@ -275,17 +287,25 @@ async function main() {
   if (!selectedVoice) {
     throw new Error("No voices available in your ElevenLabs account");
   }
-  console.log(`\n   Selected voice: ${selectedVoice.name} (${selectedVoice.voice_id})`);
+  console.log(
+    `\n   Selected voice: ${selectedVoice.name} (${selectedVoice.voice_id})`
+  );
 
   // Step 2: Create agents
   console.log("\n2. Creating voice agents...\n");
 
-  const agents: { name: string; envVar: string; prompt: string; firstMessage: string }[] = [
+  const agents: {
+    name: string;
+    envVar: string;
+    prompt: string;
+    firstMessage: string;
+  }[] = [
     {
       name: "alfred-restaurant",
       envVar: "ELEVENLABS_AGENT_RESTAURANT",
       prompt: RESTAURANT_PROMPT,
-      firstMessage: "Good day, I'm calling to enquire about making a reservation, please.",
+      firstMessage:
+        "Good day, I'm calling to enquire about making a reservation, please.",
     },
     {
       name: "alfred-medical",
@@ -347,7 +367,9 @@ async function main() {
   console.log("\nSetup complete!");
   console.log("\nNext steps:");
   console.log("1. Copy the environment variables above to your .env file");
-  console.log("2. Configure webhooks for each agent in the ElevenLabs dashboard:");
+  console.log(
+    "2. Configure webhooks for each agent in the ElevenLabs dashboard:"
+  );
   console.log("   - URL: https://your-app-url.com/webhook/elevenlabs");
   console.log("   - Type: post_call_transcription");
   console.log("3. Run: bun run migrate");

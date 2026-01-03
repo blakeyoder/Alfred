@@ -10,10 +10,17 @@ CHECK (agent_type IN ('restaurant', 'medical', 'general'));
 ALTER TABLE voice_calls
 RENAME COLUMN call_type TO call_purpose;
 
--- Update the check constraint for call_purpose to include new values
+-- Drop the old constraint first
 ALTER TABLE voice_calls
 DROP CONSTRAINT voice_calls_call_type_check;
 
+-- Migrate existing data to valid values BEFORE adding new constraint
+-- 'personal' was in the old schema but not in the new one - map to 'other'
+UPDATE voice_calls
+SET call_purpose = 'other'
+WHERE call_purpose = 'personal';
+
+-- Now add the new constraint (data is already valid)
 ALTER TABLE voice_calls
 ADD CONSTRAINT voice_calls_call_purpose_check
 CHECK (call_purpose IN ('reservation', 'confirmation', 'inquiry', 'appointment', 'other'));

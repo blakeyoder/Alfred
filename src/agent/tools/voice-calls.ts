@@ -81,9 +81,10 @@ export function createVoiceCallTools(
           const phoneNumberId = getPhoneNumberId();
           const agentId = getVoiceAgentId(agentType);
 
-          // Get user name for dynamic variables
+          // Get user info for dynamic variables
           const user = await getUserById(ctx.session.userId);
           const userName = user?.name ?? "your assistant";
+          const callbackNumber = user?.phone_number ?? null;
 
           // Create database record first (pending status)
           const voiceCall = await createVoiceCall(
@@ -98,6 +99,7 @@ export function createVoiceCallTools(
               dynamicVariables: {
                 user_name: userName,
                 call_instructions: instructions,
+                ...(callbackNumber && { callback_number: callbackNumber }),
                 ...dynamicVariables,
               },
             }
@@ -118,6 +120,7 @@ export function createVoiceCallTools(
                   recipient_name: toName,
                   agent_type: agentType,
                   call_purpose: callPurpose,
+                  ...(callbackNumber && { callback_number: callbackNumber }),
                   ...dynamicVariables,
                 },
               },
