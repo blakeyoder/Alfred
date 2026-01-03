@@ -61,7 +61,8 @@ app.post(webhookPath, async (req, res) => {
 // Graceful shutdown
 async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down...`);
-  await bot.telegram.deleteWebhook();
+  // Don't delete webhook - new instance will set it on startup
+  // Deleting here causes a race condition during deploys
   await closeConnection();
   process.exit(0);
 }
