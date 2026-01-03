@@ -67,13 +67,38 @@ app.get("/", (_req, res) => {
   });
 });
 
+// Debug endpoint to check webhook status
+app.get("/debug/webhook", async (_req, res) => {
+  try {
+    const info = await bot.telegram.getWebhookInfo();
+    res.json({
+      url: info.url,
+      has_custom_certificate: info.has_custom_certificate,
+      pending_update_count: info.pending_update_count,
+      last_error_date: info.last_error_date,
+      last_error_message: info.last_error_message,
+      max_connections: info.max_connections,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 // Telegram webhook endpoint
 app.post(webhookPath, async (req, res) => {
+  const updateId = req.body?.update_id;
+  const messageText = req.body?.message?.text?.slice(0, 50);
+  console.log(
+    `[webhook] Received update ${updateId}: ${messageText ?? "(no text)"}`
+  );
+
   try {
     await bot.handleUpdate(req.body);
     res.sendStatus(200);
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("[webhook] Error processing update:", error);
     res.sendStatus(500);
   }
 });
