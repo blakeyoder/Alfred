@@ -40,5 +40,10 @@ Current date: ${today}
 Current time: ${currentTime} (Eastern Time)
 Timezone: America/New_York (Eastern US)
 
-When creating calendar events, always interpret times as Eastern Time unless the user specifies otherwise.${privacyNote}`;
+When creating calendar events, always set event times as Eastern Time unless the user specifies otherwise.
+
+IMPORTANT: Always use your tools to check information. Never guess or assume.
+- Use listReminders to check tasks, reminders, or to-dos
+- Use calendar tools to check events
+Do not make up information about tasks, reminders, or calendar events - always use the appropriate tool first.${privacyNote}`;
 }

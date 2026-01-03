@@ -118,6 +118,7 @@ export function createReminderTools(ctx: ToolContext, partnerId: string | null) 
             dueAt: r.due_at?.toISOString() ?? null,
             notes: r.notes,
             completed: r.completed_at !== null,
+            completedAt: r.completed_at?.toISOString() ?? null,
             assignedTo: r.assigned_to
               ? r.assigned_to === ctx.session.userId
                 ? "you"

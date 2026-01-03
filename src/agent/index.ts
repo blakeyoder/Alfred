@@ -18,6 +18,10 @@ export interface ChatOptions {
 
 export interface ChatResult {
   text: string;
+  toolCalls?: Array<{
+    toolName: string;
+    args: unknown;
+  }>;
   usage?: {
     inputTokens: number;
     outputTokens: number;
@@ -72,8 +76,21 @@ export async function chat(
       }
     }
 
+    // Collect all tool calls from all steps
+    const allToolCalls: Array<{ toolName: string; args: unknown }> = [];
+    for (const step of result.steps) {
+      if (step.toolCalls && step.toolCalls.length > 0) {
+        for (const tc of step.toolCalls) {
+          // Access args via type assertion since TypedToolCall has args but DynamicToolCall doesn't
+          const args = "args" in tc ? tc.args : undefined;
+          allToolCalls.push({ toolName: tc.toolName, args });
+        }
+      }
+    }
+
     return {
       text: result.text,
+      toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
       usage: result.usage
         ? {
             inputTokens: result.usage.inputTokens ?? 0,

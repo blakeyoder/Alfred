@@ -529,7 +529,13 @@ export function createBot(token: string): Telegraf {
 
       // Save messages to DB
       await saveMessage(session.threadId, "user", messageText, user.id);
-      await saveMessage(session.threadId, "assistant", result.text);
+      await saveMessage(
+        session.threadId,
+        "assistant",
+        result.text,
+        undefined,
+        result.toolCalls
+      );
 
       // Send response (split if too long)
       // Convert **bold** to *bold* for Telegram Markdown v1
