@@ -412,6 +412,15 @@ export function createBot(token: string): Telegraf {
 
   // /phone command - request phone number for voice call callbacks
   bot.command("phone", async (ctx) => {
+    // Phone number requests only work in private chats (Telegram API limitation)
+    const chatType = ctx.chat.type;
+    if (chatType === "group" || chatType === "supergroup") {
+      await ctx.reply(
+        "Please DM me to set your phone number (Telegram only allows this in private chats)."
+      );
+      return;
+    }
+
     const telegramId = ctx.from.id;
     const user = await getUserByTelegramId(telegramId);
 
