@@ -86,16 +86,21 @@ export function createVoiceCallTools(
         );
 
         try {
+          console.log(`[voice-call] Starting call setup...`);
           const phoneNumberId = getPhoneNumberId();
+          console.log(`[voice-call] Phone number ID: ${phoneNumberId}`);
           const agentId = getVoiceAgentId(agentType);
           console.log(`[voice-call] Using agent ID: ${agentId}`);
 
           // Get user info for dynamic variables
+          console.log(`[voice-call] Fetching user info for ${ctx.session.userId}...`);
           const user = await getUserById(ctx.session.userId);
+          console.log(`[voice-call] User: ${user?.name ?? "unknown"}`);
           const userName = user?.name ?? "your assistant";
           const callbackNumber = user?.phone_number ?? null;
 
           // Create database record first (pending status)
+          console.log(`[voice-call] Creating database record...`);
           const voiceCall = await createVoiceCall(
             ctx.session.coupleId,
             ctx.session.userId,
@@ -114,7 +119,10 @@ export function createVoiceCallTools(
             }
           );
 
+          console.log(`[voice-call] Database record created: ${voiceCall.id}`);
+
           // Initiate the call via ElevenLabs
+          console.log(`[voice-call] Initiating ElevenLabs API call...`);
           let response: OutboundCallResponse;
           try {
             response = await initiateOutboundCall({
@@ -147,9 +155,11 @@ export function createVoiceCallTools(
             };
           }
 
+          console.log(`[voice-call] API call completed successfully`);
           console.log(`[voice-call] API response:`, JSON.stringify(response));
 
           if (!response.success || !response.conversation_id) {
+            console.log(`[voice-call] API returned failure or no conversation_id`);
             // API returned failure - mark record as failed
             const errorMessage =
               response.message || "No conversation ID returned";
@@ -162,12 +172,14 @@ export function createVoiceCallTools(
           }
 
           // Update record with ElevenLabs IDs
+          console.log(`[voice-call] Updating database with conversation_id: ${response.conversation_id}`);
           await updateVoiceCallInitiated(
             voiceCall.id,
             response.conversation_id,
             response.callSid
           );
 
+          console.log(`[voice-call] Call successfully initiated!`);
           return {
             success: true,
             message: `Call initiated to ${toName} at ${toNumber}. I'll notify you when the call completes.`,

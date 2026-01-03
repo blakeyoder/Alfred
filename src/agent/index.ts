@@ -66,8 +66,10 @@ export async function chat(
   }
 
   const tools = createTools({ session: context }, partnerId);
+  console.log(`[agent] Tools available: ${Object.keys(tools).join(", ")}`);
 
   try {
+    console.log(`[agent] Calling generateText with message: "${message.slice(0, 100)}..."`);
     const result = await generateText({
       model: openai("gpt-4o"),
       system: buildSystemPrompt({ context, memoryContext }),
@@ -82,12 +84,17 @@ export async function chat(
           parallelToolCalls: true,
         },
       },
-      onStepFinish: async ({ toolResults }) => {
+      onStepFinish: async ({ toolCalls, toolResults }) => {
+        if (toolCalls && toolCalls.length > 0) {
+          for (const tc of toolCalls) {
+            console.log(`[agent] Tool called: ${tc.toolName}`);
+          }
+        }
         if (toolResults && toolResults.length > 0) {
           for (const toolResult of toolResults) {
             console.log(
-              `[Agent] Tool: ${toolResult.toolName}`,
-              toolResult.output
+              `[agent] Tool result: ${toolResult.toolName}`,
+              JSON.stringify(toolResult.output).slice(0, 200)
             );
           }
         }

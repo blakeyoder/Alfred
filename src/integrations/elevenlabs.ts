@@ -143,14 +143,26 @@ async function makeElevenLabsRequest<TResponse>(
     options.body = JSON.stringify(body);
   }
 
+  console.log(`[elevenlabs] ${method} ${endpoint}`);
+  if (body) {
+    console.log(`[elevenlabs] Request body:`, JSON.stringify(body).slice(0, 500));
+  }
+
+  const startTime = Date.now();
   const response = await fetch(`${ELEVENLABS_API_BASE}${endpoint}`, options);
+  const elapsed = Date.now() - startTime;
+
+  console.log(`[elevenlabs] Response: ${response.status} (${elapsed}ms)`);
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`[elevenlabs] Error response:`, error);
     throw new Error(`ElevenLabs API error (${response.status}): ${error}`);
   }
 
-  return response.json() as Promise<TResponse>;
+  const json = await response.json();
+  console.log(`[elevenlabs] Response body:`, JSON.stringify(json).slice(0, 500));
+  return json as TResponse;
 }
 
 /**
