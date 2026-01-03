@@ -8,6 +8,10 @@
 import "dotenv/config";
 import { createBot } from "./bot.js";
 import { closeConnection } from "../../db/client.js";
+import {
+  startReminderNotifications,
+  stopReminderNotifications,
+} from "../../services/reminder-notifications.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -19,6 +23,7 @@ const bot = createBot(token);
 // Graceful shutdown
 async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down...`);
+  stopReminderNotifications();
   bot.stop(signal);
   await closeConnection();
   process.exit(0);
@@ -31,6 +36,9 @@ process.once("SIGTERM", () => shutdown("SIGTERM"));
 async function main() {
   console.log("Starting Alfred Telegram bot (polling mode)...");
   console.log("Bot is running. Press Ctrl+C to stop.\n");
+
+  // Start proactive reminder notifications
+  startReminderNotifications(bot.telegram);
 
   await bot.launch();
 }

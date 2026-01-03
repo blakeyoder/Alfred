@@ -12,6 +12,10 @@ import { createBot } from "./bot.js";
 import { closeConnection } from "../../db/client.js";
 import { runMigrations } from "../../db/migrations/migrate.js";
 import { seedProduction } from "../../scripts/seed-prod.js";
+import {
+  startReminderNotifications,
+  stopReminderNotifications,
+} from "../../services/reminder-notifications.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -61,6 +65,7 @@ app.post(webhookPath, async (req, res) => {
 // Graceful shutdown
 async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down...`);
+  stopReminderNotifications();
   // Don't delete webhook - new instance will set it on startup
   // Deleting here causes a race condition during deploys
   await closeConnection();
@@ -89,6 +94,9 @@ async function main() {
     console.log(`Health check: http://localhost:${port}/health`);
     console.log(`Webhook endpoint: ${webhookUrl}\n`);
   });
+
+  // Start proactive reminder notifications
+  startReminderNotifications(bot.telegram);
 }
 
 main().catch(async (error) => {

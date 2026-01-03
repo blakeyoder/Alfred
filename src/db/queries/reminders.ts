@@ -9,6 +9,7 @@ export interface Reminder {
   due_at: Date | null;
   assigned_to: string | null;
   completed_at: Date | null;
+  notified_at: Date | null;
   created_at: Date;
 }
 
@@ -121,4 +122,33 @@ export async function deleteReminder(id: string): Promise<boolean> {
     DELETE FROM reminders WHERE id = ${id}
   `;
   return result.count > 0;
+}
+
+/**
+ * Get reminders that need notification (due within the next hour, not completed, not yet notified)
+ */
+export async function getRemindersToNotify(): Promise<Reminder[]> {
+  const now = new Date();
+  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+
+  return sql<Reminder[]>`
+    SELECT * FROM reminders
+    WHERE due_at IS NOT NULL
+      AND due_at <= ${oneHourFromNow}
+      AND due_at >= ${now}
+      AND completed_at IS NULL
+      AND notified_at IS NULL
+    ORDER BY due_at ASC
+  `;
+}
+
+/**
+ * Mark a reminder as notified
+ */
+export async function markReminderNotified(id: string): Promise<void> {
+  await sql`
+    UPDATE reminders
+    SET notified_at = NOW()
+    WHERE id = ${id}
+  `;
 }
