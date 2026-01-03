@@ -5,6 +5,7 @@ export interface Couple {
   id: string;
   name: string | null;
   shared_calendar_id: string | null;
+  telegram_group_id: number | null;
   created_at: Date;
 }
 
@@ -107,6 +108,26 @@ export async function setSharedCalendarId(
   await sql`
     UPDATE couples
     SET shared_calendar_id = ${calendarId}
+    WHERE id = ${coupleId}
+  `;
+}
+
+export async function getCoupleByGroupId(
+  telegramGroupId: number
+): Promise<Couple | null> {
+  const rows = await sql<Couple[]>`
+    SELECT * FROM couples WHERE telegram_group_id = ${telegramGroupId}
+  `;
+  return rows[0] ?? null;
+}
+
+export async function setTelegramGroupId(
+  coupleId: string,
+  telegramGroupId: number | null
+): Promise<void> {
+  await sql`
+    UPDATE couples
+    SET telegram_group_id = ${telegramGroupId}
     WHERE id = ${coupleId}
   `;
 }

@@ -9,9 +9,11 @@ import {
 } from "../../db/queries/telegram.js";
 import {
   getCoupleForUser,
+  getCoupleByGroupId,
   getPartner,
   getSharedCalendarId,
   setSharedCalendarId,
+  setTelegramGroupId,
 } from "../../db/queries/couples.js";
 import { getThreadsForUser } from "../../db/queries/threads.js";
 import {
@@ -369,6 +371,60 @@ export function createBot(token: string): Telegraf {
     );
   });
 
+  // /setup command - link group chat to a couple
+  bot.command("setup", async (ctx) => {
+    const chatType = ctx.chat.type;
+
+    // Only works in group chats
+    if (chatType !== "group" && chatType !== "supergroup") {
+      await ctx.reply(
+        "The /setup command only works in group chats.\n\n" +
+          "Add me to a group with your partner, then run /setup there."
+      );
+      return;
+    }
+
+    const telegramId = ctx.from.id;
+    const groupId = ctx.chat.id;
+
+    // Check if sender is linked
+    const user = await getUserByTelegramId(telegramId);
+    if (!user) {
+      await ctx.reply(
+        "You need to link your account first.\n\n" +
+          "DM me and use /link <email> to connect your account."
+      );
+      return;
+    }
+
+    // Get the user's couple
+    const couple = await getCoupleForUser(user.id);
+    if (!couple) {
+      await ctx.reply(
+        "You're not part of a couple yet. Contact support to get set up."
+      );
+      return;
+    }
+
+    // Check if this group is already linked to another couple
+    const existingCouple = await getCoupleByGroupId(groupId);
+    if (existingCouple && existingCouple.id !== couple.id) {
+      await ctx.reply(
+        "This group is already linked to a different couple."
+      );
+      return;
+    }
+
+    // Link the group to the couple
+    await setTelegramGroupId(couple.id, groupId);
+
+    await ctx.reply(
+      `Group linked to ${couple.name ?? "your couple"}!\n\n` +
+        "Both partners can now chat with me here. " +
+        "I'll also send reminder notifications to this group."
+    );
+  });
+
   // /help command
   bot.help(async (ctx) => {
     await ctx.reply(
@@ -377,6 +433,8 @@ export function createBot(token: string): Telegraf {
         "/link <email> - Connect your account\n" +
         "/unlink - Disconnect account\n" +
         "/status - Show current connection\n\n" +
+        "Group Setup:\n" +
+        "/setup - Link this group to your couple\n\n" +
         "Google Calendar:\n" +
         "/auth - Connect Google Calendar\n" +
         "/calendar list - List calendars\n" +
@@ -390,17 +448,46 @@ export function createBot(token: string): Telegraf {
   bot.on(message("text"), async (ctx) => {
     const telegramId = ctx.from.id;
     const messageText = ctx.message.text;
+    const chatType = ctx.chat.type;
+    const isGroupChat = chatType === "group" || chatType === "supergroup";
 
     // Skip if it's a command (already handled above)
     if (messageText.startsWith("/")) return;
 
-    // Check if linked
+    // Check if sender is linked
     const user = await getUserByTelegramId(telegramId);
     if (!user) {
+      if (isGroupChat) {
+        // In group chats, don't spam with link prompts for every unlinked message
+        // Only respond if they seem to be talking to the bot
+        return;
+      }
       await ctx.reply(
         "Please link your account first:\n/link <your-email>\n\nExample: /link blake@example.com"
       );
       return;
+    }
+
+    // For group chats, verify the group is set up for this couple
+    if (isGroupChat) {
+      const groupId = ctx.chat.id;
+      const couple = await getCoupleByGroupId(groupId);
+
+      if (!couple) {
+        // Group not set up - prompt to set up
+        await ctx.reply(
+          "This group isn't set up yet.\n\n" +
+            "Run /setup to link this group to your couple."
+        );
+        return;
+      }
+
+      // Verify the sender is part of this couple
+      const userCouple = await getCoupleForUser(user.id);
+      if (!userCouple || userCouple.id !== couple.id) {
+        // User is not part of the couple this group is linked to
+        return;
+      }
     }
 
     // Build session context
