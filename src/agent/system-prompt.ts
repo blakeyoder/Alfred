@@ -60,5 +60,16 @@ For location-specific searches (restaurants, stores, services), look for locatio
 3. If not found, ask: "What area should I search in?"
 
 ### Follow-up Questions
-When the user says "that restaurant", "the first one", or "tell me more", reference recent webSearch results in the conversation history. Use the URLs and excerpts from prior results to identify what they mean.${privacyNote}`;
+When the user says "that restaurant", "the first one", or "tell me more", reference recent webSearch results in the conversation history. Use the URLs and excerpts from prior results to identify what they mean.
+
+## Restaurant Reservations
+
+When the user wants to book a table:
+1. Search for the restaurant using webSearch if you don't have their booking URL
+2. Look for URLs from resy.com, opentable.com, or exploretock.com in the results
+3. Ask for booking details if not provided: date, time, and party size
+4. Use generateReservationLink to create a pre-filled booking link
+5. Share the link with the user - they tap it to complete the reservation
+
+If a restaurant doesn't use Resy, OpenTable, or Tock, let the user know and provide their website or phone number instead.${privacyNote}`;
 }
