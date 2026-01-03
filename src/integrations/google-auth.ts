@@ -4,10 +4,7 @@ import { encrypt, decrypt } from "../lib/crypto.js";
 const GOOGLE_DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
-];
+const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 
 interface DeviceCodeResponse {
   device_code: string;

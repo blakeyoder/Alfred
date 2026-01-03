@@ -4,32 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+**Always use `bun`, not `npm`.**
+
 ```bash
 # Development
-npm run dev          # Run entry point (src/index.ts)
-npm run cli          # Start interactive CLI REPL
-npm run build        # Compile TypeScript to dist/
+bun run dev          # Start Telegram bot (polling mode)
+bun run build        # Compile TypeScript to dist/
 
 # Database
 docker compose up -d # Start local PostgreSQL
-npm run migrate      # Run SQL migrations
-npm run seed:demo    # Create demo users and data
+bun run migrate      # Run SQL migrations
+bun run seed:demo    # Create demo users and data
+```
+
+## Development Workflow
+
+```sh
+# 1. Make changes
+
+# 2. Typecheck (fast)
+bun run typecheck
+
+# 3. Build before deploying
+bun run build
 ```
 
 ## Architecture
 
-**Couples EA** is an AI-powered executive assistant for couples using the Vercel AI SDK with OpenAI GPT-4o.
+**Alfred** is an AI-powered executive assistant for couples using the Vercel AI SDK with OpenAI GPT-4o, deployed as a Telegram bot.
 
 ### Core Flow
 
 ```
-CLI (src/cli.ts)
+Telegram Bot (src/adapters/telegram/)
     │
     ▼
 Agent (src/agent/index.ts)  ──▶  Tools (reminders, calendar)
     │                                    │
     ▼                                    ▼
-Session (src/session/store.ts)    DB Queries (src/db/queries/)
+Session Context                   DB Queries (src/db/queries/)
                                          │
                                          ▼
                                   PostgreSQL (via postgres.js)
@@ -41,8 +54,19 @@ Session (src/session/store.ts)    DB Queries (src/db/queries/)
 - **Threads**: Conversations are stored in threads with two visibility modes:
   - `shared`: Both partners can see the conversation
   - `dm`: Private to one partner (for surprises/gifts)
-- **Session**: Stored in `~/.couplesea/session.json`, tracks current user, couple, and active thread
+- **Telegram Linkage**: Users link their Telegram account via `/link <email>`
+- **Shared Calendar**: Couples configure a shared Google Calendar for events
 - **Tools**: Agent tools are created with session context to resolve "me"/"partner" references
+
+### Telegram Commands
+
+- `/link <email>` - Connect Telegram to Alfred account
+- `/unlink` - Disconnect account
+- `/status` - Show current connection info
+- `/auth` - Connect Google Calendar (OAuth device flow)
+- `/calendar list` - List writable calendars
+- `/calendar set <id>` - Set shared calendar for couple
+- `/calendar show` - Show current shared calendar
 
 ### Database
 
@@ -52,7 +76,7 @@ Schema tables: `users`, `couples`, `couple_members`, `conversation_threads`, `co
 
 ### Google Integration
 
-OAuth uses Device Authorization Grant flow for CLI. Tokens are encrypted at rest using AES-256-GCM (requires `ENCRYPTION_KEY` env var).
+OAuth uses Device Authorization Grant flow. Tokens are encrypted at rest using AES-256-GCM (requires `ENCRYPTION_KEY` env var).
 
 ## Code Conventions
 

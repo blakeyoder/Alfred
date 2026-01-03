@@ -4,6 +4,7 @@ import type { User } from "./users.js";
 export interface Couple {
   id: string;
   name: string | null;
+  shared_calendar_id: string | null;
   created_at: Date;
 }
 
@@ -88,4 +89,24 @@ export async function createCoupleWithMembers(
 
     return couple;
   });
+}
+
+export async function getSharedCalendarId(
+  coupleId: string
+): Promise<string | null> {
+  const rows = await sql<{ shared_calendar_id: string | null }[]>`
+    SELECT shared_calendar_id FROM couples WHERE id = ${coupleId}
+  `;
+  return rows[0]?.shared_calendar_id ?? null;
+}
+
+export async function setSharedCalendarId(
+  coupleId: string,
+  calendarId: string | null
+): Promise<void> {
+  await sql`
+    UPDATE couples
+    SET shared_calendar_id = ${calendarId}
+    WHERE id = ${coupleId}
+  `;
 }

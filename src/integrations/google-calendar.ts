@@ -1,6 +1,7 @@
 import { getValidAccessToken } from "./google-auth.js";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
+const DEFAULT_TIMEZONE = "America/New_York";
 
 interface CalendarEvent {
   id: string;
@@ -18,6 +19,15 @@ interface CalendarEvent {
   };
   location?: string;
   attendees?: Array<{ email: string; responseStatus?: string }>;
+}
+
+export interface CalendarListEntry {
+  id: string;
+  summary: string;
+  description?: string;
+  primary?: boolean;
+  accessRole: "freeBusyReader" | "reader" | "writer" | "owner";
+  backgroundColor?: string;
 }
 
 interface CreateEventInput {
@@ -103,11 +113,11 @@ export async function createEvent(
     description: event.description,
     start: {
       dateTime: event.startTime,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timeZone: DEFAULT_TIMEZONE,
     },
     end: {
       dateTime: event.endTime,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timeZone: DEFAULT_TIMEZONE,
     },
     location: event.location,
     attendees: event.attendees?.map((email) => ({ email })),
@@ -257,4 +267,28 @@ export function formatEvents(events: CalendarEvent[]): string[] {
 
     return `${startTime}${endTime ? ` - ${endTime}` : ""}: ${e.summary}`;
   });
+}
+
+/**
+ * List all calendars accessible to the user.
+ * Only returns calendars the user can write to (writer or owner role).
+ */
+export async function listCalendars(
+  userId: string,
+  writableOnly = true
+): Promise<CalendarListEntry[]> {
+  const response = await makeCalendarRequest<{ items: CalendarListEntry[] }>(
+    userId,
+    "/users/me/calendarList"
+  );
+
+  const calendars = response.items || [];
+
+  if (writableOnly) {
+    return calendars.filter(
+      (cal) => cal.accessRole === "writer" || cal.accessRole === "owner"
+    );
+  }
+
+  return calendars;
 }

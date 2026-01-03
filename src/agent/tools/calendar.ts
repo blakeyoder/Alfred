@@ -7,15 +7,12 @@ import {
   formatEvents,
 } from "../../integrations/google-calendar.js";
 import { hasGoogleAuth } from "../../integrations/google-auth.js";
+import { getSharedCalendarId } from "../../db/queries/couples.js";
 import type { ToolContext } from "./reminders.js";
 
 const getCalendarEventsSchema = z.object({
   startDate: z.iso.date().describe("Start date (YYYY-MM-DD)"),
   endDate: z.iso.date().describe("End date (YYYY-MM-DD)"),
-  whose: z
-    .enum(["me", "partner", "both"])
-    .optional()
-    .describe("Whose calendar to check"),
 });
 
 const findFreeTimeSchema = z.object({
@@ -35,9 +32,12 @@ const createCalendarEventSchema = z.object({
   description: z.string().optional().describe("Event description"),
   location: z.string().optional().describe("Event location"),
   whose: z
-    .enum(["me", "partner", "both"])
+    .enum(["me", "partner", "both", "shared"])
     .optional()
-    .describe("Whose calendar to add the event to"),
+    .default("shared")
+    .describe(
+      "Where to add the event: 'shared' (default) uses the couple's shared calendar, 'me'/'partner'/'both' adds to individual calendars"
+    ),
 });
 
 export function createCalendarTools(
@@ -46,65 +46,54 @@ export function createCalendarTools(
 ) {
   return {
     getCalendarEvents: tool({
-      description: "Get calendar events in a date range",
+      description:
+        "Get calendar events in a date range from the shared couple calendar",
       inputSchema: getCalendarEventsSchema,
-      execute: async ({ startDate, endDate, whose = "me" }) => {
-        const userIds: string[] = [];
+      execute: async ({ startDate, endDate }) => {
+        // Get the shared calendar ID for the couple
+        const sharedCalendarId = await getSharedCalendarId(ctx.session.coupleId);
 
-        if (whose === "me" || whose === "both") {
-          userIds.push(ctx.session.userId);
-        }
-        if ((whose === "partner" || whose === "both") && partnerId) {
-          userIds.push(partnerId);
-        }
-
-        const results: Array<{
-          user: string;
-          events: string[];
-          error?: string;
-        }> = [];
-
-        for (const userId of userIds) {
-          const isCurrentUser = userId === ctx.session.userId;
-          const userName = isCurrentUser
-            ? "Your"
-            : `${ctx.session.partnerName ?? "Partner"}'s`;
-
-          const hasAuth = await hasGoogleAuth(userId);
-          if (!hasAuth) {
-            results.push({
-              user: userName,
-              events: [],
-              error: `${userName} Google Calendar is not connected.`,
-            });
-            continue;
-          }
-
-          try {
-            const events = await getEvents(userId, startDate, endDate);
-            results.push({
-              user: userName,
-              events: formatEvents(events),
-            });
-          } catch (error) {
-            results.push({
-              user: userName,
-              events: [],
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "Failed to fetch events",
-            });
-          }
+        if (!sharedCalendarId) {
+          return {
+            success: false,
+            message:
+              "No shared calendar configured. Use /calendar list to see available calendars and /calendar set <id> to set one.",
+            events: [],
+          };
         }
 
-        const totalEvents = results.reduce((sum, r) => sum + r.events.length, 0);
+        const hasAuth = await hasGoogleAuth(ctx.session.userId);
+        if (!hasAuth) {
+          return {
+            success: false,
+            message:
+              "You need to connect Google Calendar first. Use /auth to connect.",
+            events: [],
+          };
+        }
 
-        return {
-          dateRange: { startDate, endDate },
-          totalEvents,
-          results,
-        };
+        try {
+          const events = await getEvents(
+            ctx.session.userId,
+            startDate,
+            endDate,
+            sharedCalendarId
+          );
+
+          return {
+            success: true,
+            dateRange: { startDate, endDate },
+            totalEvents: events.length,
+            events: formatEvents(events),
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message:
+              error instanceof Error ? error.message : "Failed to fetch events",
+            events: [],
+          };
+        }
       },
     }),
 
@@ -183,8 +172,80 @@ export function createCalendarTools(
         endTime,
         description,
         location,
-        whose = "me",
+        whose = "shared",
       }) => {
+        // Handle shared calendar case
+        if (whose === "shared") {
+          const sharedCalendarId = await getSharedCalendarId(
+            ctx.session.coupleId
+          );
+
+          if (!sharedCalendarId) {
+            return {
+              success: false,
+              message:
+                "No shared calendar configured. Use /calendar list to see available calendars and /calendar set <id> to set one.",
+              results: [],
+            };
+          }
+
+          const hasAuth = await hasGoogleAuth(ctx.session.userId);
+          if (!hasAuth) {
+            return {
+              success: false,
+              message:
+                "You need to connect Google Calendar first. Use /auth google to connect.",
+              results: [],
+            };
+          }
+
+          try {
+            const event = await createEvent(
+              ctx.session.userId,
+              {
+                summary: title,
+                description,
+                startTime,
+                endTime,
+                location,
+              },
+              sharedCalendarId
+            );
+
+            return {
+              success: true,
+              message: `Added "${title}" to shared calendar`,
+              results: [
+                {
+                  user: "shared",
+                  success: true,
+                  message: `Added "${title}" to shared calendar`,
+                  eventId: event.id,
+                },
+              ],
+            };
+          } catch (error) {
+            return {
+              success: false,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to create event",
+              results: [
+                {
+                  user: "shared",
+                  success: false,
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to create event",
+                },
+              ],
+            };
+          }
+        }
+
+        // Handle individual calendar cases (me, partner, both)
         const userIds: string[] = [];
 
         if (whose === "me" || whose === "both") {

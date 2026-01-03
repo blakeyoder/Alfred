@@ -7,7 +7,12 @@ import {
   linkTelegramAccount,
   unlinkTelegramAccount,
 } from "../../db/queries/telegram.js";
-import { getCoupleForUser, getPartner } from "../../db/queries/couples.js";
+import {
+  getCoupleForUser,
+  getPartner,
+  getSharedCalendarId,
+  setSharedCalendarId,
+} from "../../db/queries/couples.js";
 import { getThreadsForUser } from "../../db/queries/threads.js";
 import {
   getRecentMessagesForContext,
@@ -15,6 +20,13 @@ import {
   Message,
 } from "../../db/queries/messages.js";
 import { getUserById } from "../../db/queries/users.js";
+import {
+  initiateDeviceFlow,
+  completeDeviceFlow,
+  storeTokens,
+  hasGoogleAuth,
+} from "../../integrations/google-auth.js";
+import { listCalendars } from "../../integrations/google-calendar.js";
 
 // Convert DB messages to ModelMessage format
 function dbMessageToModelMessage(msg: Message): ModelMessage {
@@ -167,6 +179,169 @@ export function createBot(token: string): Telegraf {
     );
   });
 
+  // /auth command - Google OAuth
+  bot.command("auth", async (ctx) => {
+    const telegramId = ctx.from.id;
+    const user = await getUserByTelegramId(telegramId);
+
+    if (!user) {
+      await ctx.reply("Please link your account first: /link <email>");
+      return;
+    }
+
+    // Check if already authenticated
+    const hasAuth = await hasGoogleAuth(user.id);
+    if (hasAuth) {
+      await ctx.reply(
+        "You're already connected to Google Calendar.\n\n" +
+          "Use /calendar to manage your shared calendar."
+      );
+      return;
+    }
+
+    try {
+      await ctx.reply("Starting Google authentication...");
+
+      const flow = await initiateDeviceFlow();
+
+      await ctx.reply(
+        "To connect Google Calendar:\n\n" +
+          `1. Open: ${flow.verificationUrl}\n` +
+          `2. Enter code: ${flow.userCode}\n\n` +
+          "Waiting for you to complete authorization..."
+      );
+
+      // Poll for completion (with timeout)
+      const tokens = await completeDeviceFlow(
+        flow.deviceCode,
+        flow.interval,
+        flow.expiresIn
+      );
+
+      const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+      const scopes = tokens.scope.split(" ");
+
+      await storeTokens(
+        user.id,
+        tokens.access_token,
+        tokens.refresh_token,
+        expiresAt,
+        scopes
+      );
+
+      await ctx.reply(
+        "Google Calendar connected successfully!\n\n" +
+          "Use /calendar list to see your calendars and set up a shared one."
+      );
+    } catch (error) {
+      if (error instanceof Error) {
+        await ctx.reply(`Authentication failed: ${error.message}`);
+      } else {
+        await ctx.reply("Authentication failed. Please try again.");
+      }
+    }
+  });
+
+  // /calendar command
+  bot.command("calendar", async (ctx) => {
+    const telegramId = ctx.from.id;
+    const user = await getUserByTelegramId(telegramId);
+
+    if (!user) {
+      await ctx.reply("Please link your account first: /link <email>");
+      return;
+    }
+
+    const session = await buildSessionContext(user.id);
+    if (!session) {
+      await ctx.reply("Unable to find your couple. Make sure you're set up.");
+      return;
+    }
+
+    const args = ctx.message.text.split(" ").slice(1);
+    const subCmd = args[0]?.toLowerCase();
+
+    switch (subCmd) {
+      case "list": {
+        const hasAuth = await hasGoogleAuth(user.id);
+        if (!hasAuth) {
+          await ctx.reply(
+            "You need to connect Google Calendar first.\n\nUse /auth to get started."
+          );
+          return;
+        }
+
+        try {
+          const calendars = await listCalendars(user.id);
+          const currentShared = await getSharedCalendarId(session.context.coupleId);
+
+          if (calendars.length === 0) {
+            await ctx.reply("No writable calendars found.");
+            return;
+          }
+
+          let message = "Writable calendars:\n\n";
+          for (const cal of calendars) {
+            const isPrimary = cal.primary ? " (primary)" : "";
+            const isShared = cal.id === currentShared ? " ★" : "";
+            message += `${cal.summary}${isPrimary}${isShared}\n`;
+            message += `ID: ${cal.id}\n\n`;
+          }
+          message += "Use /calendar set <id> to set the shared calendar.";
+
+          await ctx.reply(message);
+        } catch (error) {
+          await ctx.reply(
+            `Failed to list calendars: ${error instanceof Error ? error.message : "Unknown error"}`
+          );
+        }
+        break;
+      }
+
+      case "set": {
+        const calendarId = args.slice(1).join(" ");
+        if (!calendarId) {
+          await ctx.reply(
+            "Usage: /calendar set <calendar_id>\n\n" +
+              "Use /calendar list to see available calendar IDs."
+          );
+          return;
+        }
+
+        try {
+          await setSharedCalendarId(session.context.coupleId, calendarId);
+          await ctx.reply(`Shared calendar set to:\n${calendarId}`);
+        } catch (error) {
+          await ctx.reply(
+            `Failed to set calendar: ${error instanceof Error ? error.message : "Unknown error"}`
+          );
+        }
+        break;
+      }
+
+      case "show": {
+        const currentShared = await getSharedCalendarId(session.context.coupleId);
+        if (currentShared) {
+          await ctx.reply(`Shared calendar:\n${currentShared}`);
+        } else {
+          await ctx.reply(
+            "No shared calendar configured.\n\n" +
+              "Use /calendar list to see available calendars."
+          );
+        }
+        break;
+      }
+
+      default:
+        await ctx.reply(
+          "Calendar commands:\n\n" +
+            "/calendar list - List writable calendars\n" +
+            "/calendar set <id> - Set shared calendar\n" +
+            "/calendar show - Show current shared calendar"
+        );
+    }
+  });
+
   // /status command
   bot.command("status", async (ctx) => {
     const telegramId = ctx.from.id;
@@ -198,12 +373,15 @@ export function createBot(token: string): Telegraf {
   bot.help(async (ctx) => {
     await ctx.reply(
       "Alfred - Your shared assistant\n\n" +
-        "Commands:\n" +
-        "/start - Welcome message\n" +
+        "Account:\n" +
         "/link <email> - Connect your account\n" +
         "/unlink - Disconnect account\n" +
-        "/status - Show current connection\n" +
-        "/help - Show this message\n\n" +
+        "/status - Show current connection\n\n" +
+        "Google Calendar:\n" +
+        "/auth - Connect Google Calendar\n" +
+        "/calendar list - List calendars\n" +
+        "/calendar set <id> - Set shared calendar\n" +
+        "/calendar show - Show shared calendar\n\n" +
         "Just send a message to chat with your EA!"
     );
   });
@@ -267,9 +445,16 @@ export function createBot(token: string): Telegraf {
       await saveMessage(session.threadId, "assistant", result.text);
 
       // Send response (split if too long)
-      const chunks = splitMessage(result.text);
+      // Convert **bold** to *bold* for Telegram Markdown v1
+      const telegramText = result.text.replace(/\*\*(.+?)\*\*/g, "*$1*");
+      const chunks = splitMessage(telegramText);
       for (const chunk of chunks) {
-        await ctx.reply(chunk);
+        try {
+          await ctx.reply(chunk, { parse_mode: "Markdown" });
+        } catch {
+          // Fall back to plain text if Markdown parsing fails
+          await ctx.reply(chunk);
+        }
       }
     } catch (error) {
       if (typingInterval) clearInterval(typingInterval);

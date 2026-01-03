@@ -4,16 +4,15 @@
   "description": "AI-powered Executive Assistant for couples",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx src/index.ts",
+    "dev": "bun run src/adapters/telegram/index.ts",
     "build": "tsc && cp src/db/migrations/*.sql dist/db/migrations/",
-    "start": "node dist/adapters/telegram/server.js",
-    "cli": "tsx src/cli.ts",
-    "migrate": "tsx src/db/migrations/migrate.ts",
-    "migrate:prod": "node dist/db/migrations/migrate.js",
-    "seed:demo": "tsx src/scripts/seed-demo.ts",
-    "seed:prod": "node dist/scripts/seed-prod.js",
-    "db:setup": "npm run migrate:prod && npm run seed:prod",
-    "telegram": "tsx src/adapters/telegram/index.ts"
+    "start": "bun run dist/adapters/telegram/server.js",
+    "migrate": "bun run src/db/migrations/migrate.ts",
+    "migrate:prod": "bun run dist/db/migrations/migrate.js",
+    "seed:demo": "bun run src/scripts/seed-demo.ts",
+    "seed:prod": "bun run dist/scripts/seed-prod.js",
+    "db:setup": "bun run migrate:prod && bun run seed:prod",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "ai",
@@ -26,7 +25,6 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.3",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
