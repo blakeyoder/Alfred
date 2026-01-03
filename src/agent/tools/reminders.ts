@@ -7,6 +7,7 @@ import {
   getReminderById,
   type ReminderFilter,
 } from "../../db/queries/reminders.js";
+import { parseEasternDateTime } from "../../lib/datetime.js";
 import type { SessionContext } from "../system-prompt.js";
 
 export interface ToolContext {
@@ -66,7 +67,7 @@ export function createReminderTools(ctx: ToolContext, partnerId: string | null) 
           ctx.session.userId,
           {
             notes,
-            dueAt: dueAt ? new Date(dueAt) : undefined,
+            dueAt: dueAt ? parseEasternDateTime(dueAt) : undefined,
             assignedTo: assignee,
           }
         );
