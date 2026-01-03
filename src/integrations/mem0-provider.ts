@@ -55,10 +55,34 @@ export async function searchMemoriesForCouple(
     top_k: limit,
     mem0ApiKey: process.env.MEM0_API_KEY,
   });
-  return result as Array<{
-    id: string;
-    memory: string;
-    score?: number;
-    metadata?: Record<string, unknown>;
-  }>;
+
+  // Handle different response formats from mem0
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  // If result has a results/memories array property, extract it
+  if (result && typeof result === "object") {
+    const obj = result as Record<string, unknown>;
+    if (Array.isArray(obj.results)) {
+      return obj.results as Array<{
+        id: string;
+        memory: string;
+        score?: number;
+        metadata?: Record<string, unknown>;
+      }>;
+    }
+    if (Array.isArray(obj.memories)) {
+      return obj.memories as Array<{
+        id: string;
+        memory: string;
+        score?: number;
+        metadata?: Record<string, unknown>;
+      }>;
+    }
+  }
+
+  // Fallback: return empty array if unexpected format
+  console.warn("[mem0] Unexpected searchMemories response format:", result);
+  return [];
 }
