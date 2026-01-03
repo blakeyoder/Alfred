@@ -25,7 +25,14 @@ bun run seed:demo    # Create demo users and data
 # 2. Typecheck (fast)
 bun run typecheck
 
-# 3. Build before deploying
+# 3. Linting and formatting (fast)
+bun run lint && bun run format
+- use `bun run lint:fix` to attempt autofixes
+
+# 4. Run knip before committing (fast)
+bun run knip
+
+# 5. Build before deploying
 bun run build
 ```
 

@@ -15,13 +15,6 @@ export async function getUserById(id: string): Promise<User | null> {
   return rows[0] ?? null;
 }
 
-export async function getUserByEmail(email: string): Promise<User | null> {
-  const rows = await sql<User[]>`
-    SELECT * FROM users WHERE email = ${email}
-  `;
-  return rows[0] ?? null;
-}
-
 export async function createUser(
   email: string,
   name: string,
@@ -33,13 +26,4 @@ export async function createUser(
     RETURNING *
   `;
   return rows[0];
-}
-
-export async function updateUserGoogleId(
-  userId: string,
-  googleId: string
-): Promise<void> {
-  await sql`
-    UPDATE users SET google_id = ${googleId} WHERE id = ${userId}
-  `;
 }

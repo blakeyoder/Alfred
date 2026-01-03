@@ -9,15 +9,6 @@ export interface ConversationThread {
   created_at: Date;
 }
 
-export async function getThreadById(
-  id: string
-): Promise<ConversationThread | null> {
-  const rows = await sql<ConversationThread[]>`
-    SELECT * FROM conversation_threads WHERE id = ${id}
-  `;
-  return rows[0] ?? null;
-}
-
 export async function getThreadsForUser(
   userId: string
 ): Promise<ConversationThread[]> {
@@ -53,15 +44,4 @@ export async function addParticipant(
     VALUES (${threadId}, ${userId}, ${role})
     ON CONFLICT (thread_id, user_id) DO NOTHING
   `;
-}
-
-export async function isParticipant(
-  threadId: string,
-  userId: string
-): Promise<boolean> {
-  const rows = await sql<{ count: number }[]>`
-    SELECT COUNT(*)::int as count FROM conversation_participants
-    WHERE thread_id = ${threadId} AND user_id = ${userId}
-  `;
-  return rows[0].count > 0;
 }

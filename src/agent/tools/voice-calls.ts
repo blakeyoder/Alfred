@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { ToolContext } from "./reminders.js";
 import {
   initiateOutboundCall,
+  getVoiceAgentId,
   type OutboundCallResponse,
 } from "../../integrations/elevenlabs.js";
 import {
@@ -20,9 +21,17 @@ import { getUserById } from "../../db/queries/users.js";
 const E164_REGEX = /^\+[1-9]\d{1,14}$/;
 
 const initiateVoiceCallSchema = z.object({
-  callType: z
-    .enum(["reservation", "confirmation", "personal", "other"])
-    .describe("The purpose of the call"),
+  agentType: z
+    .enum(["restaurant", "medical", "general"])
+    .describe(
+      "The type of voice agent to use. " +
+        "Use 'restaurant' for restaurant reservations, table bookings, or dining inquiries. " +
+        "Use 'medical' for doctor appointments, medical office calls, or healthcare scheduling. " +
+        "Use 'general' for all other calls including personal calls, services, and general inquiries."
+    ),
+  callPurpose: z
+    .enum(["reservation", "confirmation", "inquiry", "appointment", "other"])
+    .describe("The specific purpose of the call"),
   toNumber: z
     .string()
     .regex(
@@ -42,18 +51,12 @@ const initiateVoiceCallSchema = z.object({
     .describe("Additional variables to pass to the voice agent"),
 });
 
-function getAgentConfig() {
-  const agentId = process.env.ELEVENLABS_AGENT_ID;
+function getPhoneNumberId(): string {
   const phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
-
-  if (!agentId) {
-    throw new Error("ELEVENLABS_AGENT_ID is required for voice calls");
-  }
   if (!phoneNumberId) {
     throw new Error("ELEVENLABS_PHONE_NUMBER_ID is required for voice calls");
   }
-
-  return { agentId, phoneNumberId };
+  return phoneNumberId;
 }
 
 export function createVoiceCallTools(
@@ -67,14 +70,16 @@ export function createVoiceCallTools(
         "The AI will handle the conversation autonomously and report back when complete.",
       inputSchema: initiateVoiceCallSchema,
       execute: async ({
-        callType,
+        agentType,
+        callPurpose,
         toNumber,
         toName,
         instructions,
         dynamicVariables,
       }) => {
         try {
-          const { agentId, phoneNumberId } = getAgentConfig();
+          const phoneNumberId = getPhoneNumberId();
+          const agentId = getVoiceAgentId(agentType);
 
           // Get user name for dynamic variables
           const user = await getUserById(ctx.session.userId);
@@ -84,7 +89,8 @@ export function createVoiceCallTools(
           const voiceCall = await createVoiceCall(
             ctx.session.coupleId,
             ctx.session.userId,
-            callType,
+            agentType,
+            callPurpose,
             toNumber,
             instructions,
             {
@@ -110,7 +116,8 @@ export function createVoiceCallTools(
                   user_name: userName,
                   call_instructions: instructions,
                   recipient_name: toName,
-                  call_type: callType,
+                  agent_type: agentType,
+                  call_purpose: callPurpose,
                   ...dynamicVariables,
                 },
               },

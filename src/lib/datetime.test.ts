@@ -1,4 +1,8 @@
-import { parseEasternDateTime, isEasternDST, formatEastern } from "./datetime.js";
+import {
+  parseEasternDateTime,
+  isEasternDST,
+  formatEastern,
+} from "./datetime.js";
 
 describe("parseEasternDateTime", () => {
   describe("with explicit timezone", () => {

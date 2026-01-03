@@ -53,7 +53,10 @@ const completeReminderSchema = z.object({
   reminderId: z.string().describe("ID of the reminder to complete"),
 });
 
-export function createReminderTools(ctx: ToolContext, partnerId: string | null) {
+export function createReminderTools(
+  ctx: ToolContext,
+  partnerId: string | null
+) {
   return {
     createReminder: tool({
       description: "Create a reminder for one or both partners",
@@ -76,7 +79,7 @@ export function createReminderTools(ctx: ToolContext, partnerId: string | null) 
           ? assignedTo === "me"
             ? "you"
             : assignedTo === "partner"
-              ? ctx.session.partnerName ?? "your partner"
+              ? (ctx.session.partnerName ?? "your partner")
               : "both of you"
           : "both of you";
 
@@ -123,7 +126,7 @@ export function createReminderTools(ctx: ToolContext, partnerId: string | null) 
             assignedTo: r.assigned_to
               ? r.assigned_to === ctx.session.userId
                 ? "you"
-                : ctx.session.partnerName ?? "partner"
+                : (ctx.session.partnerName ?? "partner")
               : "both",
           })),
         };

@@ -21,7 +21,7 @@ const generateReservationLinkSchema = z.object({
     .url()
     .describe(
       "The restaurant's URL from a previous search result. " +
-        "Must be from resy.com, opentable.com, or exploretock.com.",
+        "Must be from resy.com, opentable.com, or exploretock.com."
     ),
   date: z
     .string()
@@ -40,12 +40,8 @@ const generateReservationLinkSchema = z.object({
 });
 
 const detectPlatformSchema = z.object({
-  restaurantName: z
-    .string()
-    .describe("Name of the restaurant to look up"),
-  city: z
-    .string()
-    .describe("City where the restaurant is located"),
+  restaurantName: z.string().describe("Name of the restaurant to look up"),
+  city: z.string().describe("City where the restaurant is located"),
 });
 
 // ============ Platform Detection ============
@@ -57,7 +53,7 @@ function parseRestaurantUrl(url: string): ParsedRestaurantUrl {
   // Resy: resy.com/cities/{city}/venues/{slug}
   if (hostname.includes("resy.com")) {
     const pathMatch = urlObj.pathname.match(
-      /\/cities\/([^/]+)\/venues\/([^/?]+)/,
+      /\/cities\/([^/]+)\/venues\/([^/?]+)/
     );
     if (pathMatch) {
       return {
@@ -80,10 +76,7 @@ function parseRestaurantUrl(url: string): ParsedRestaurantUrl {
   if (hostname.includes("opentable.com")) {
     const pathSegments = urlObj.pathname.split("/").filter(Boolean);
     // Skip 'r' prefix if present
-    const slug =
-      pathSegments[0] === "r"
-        ? pathSegments[1]
-        : pathSegments[0];
+    const slug = pathSegments[0] === "r" ? pathSegments[1] : pathSegments[0];
     return {
       platform: "opentable",
       restaurantSlug: slug ?? "",
@@ -114,7 +107,7 @@ function generateResyLink(
   parsed: ParsedRestaurantUrl,
   date: string,
   time: string,
-  partySize: number,
+  partySize: number
 ): string {
   // Resy format: https://resy.com/cities/{city}/venues/{slug}?date=YYYY-MM-DD&seats=N
   const baseUrl = parsed.city
@@ -133,7 +126,7 @@ function generateOpenTableLink(
   parsed: ParsedRestaurantUrl,
   date: string,
   time: string,
-  partySize: number,
+  partySize: number
 ): string {
   // OpenTable format: https://www.opentable.com/{slug}?covers=N&dateTime=YYYY-MM-DDTHH:MM
   const baseUrl = parsed.originalUrl.split("?")[0];
@@ -151,7 +144,7 @@ function generateTockLink(
   parsed: ParsedRestaurantUrl,
   date: string,
   time: string,
-  partySize: number,
+  partySize: number
 ): string {
   // Tock format: https://www.exploretock.com/{slug}?date=YYYY-MM-DD&size=N&time=HH:MM
   const baseUrl = `https://www.exploretock.com/${parsed.restaurantSlug}`;
@@ -169,7 +162,7 @@ function generateTockLink(
 
 export function createReservationTools(
   _ctx: ToolContext,
-  _partnerId: string | null,
+  _partnerId: string | null
 ) {
   return {
     generateReservationLink: tool({
@@ -207,7 +200,12 @@ export function createReservationTools(
               break;
 
             case "opentable":
-              bookingLink = generateOpenTableLink(parsed, date, time, partySize);
+              bookingLink = generateOpenTableLink(
+                parsed,
+                date,
+                time,
+                partySize
+              );
               platformName = "OpenTable";
               instructions =
                 "Tap the link to open OpenTable with your preferences pre-filled. " +

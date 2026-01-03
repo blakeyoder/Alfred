@@ -107,23 +107,6 @@ export async function completeReminder(id: string): Promise<Reminder | null> {
   return rows[0] ?? null;
 }
 
-export async function uncompleteReminder(id: string): Promise<Reminder | null> {
-  const rows = await sql<Reminder[]>`
-    UPDATE reminders
-    SET completed_at = NULL
-    WHERE id = ${id}
-    RETURNING *
-  `;
-  return rows[0] ?? null;
-}
-
-export async function deleteReminder(id: string): Promise<boolean> {
-  const result = await sql`
-    DELETE FROM reminders WHERE id = ${id}
-  `;
-  return result.count > 0;
-}
-
 /**
  * Get reminders that need notification (due within the next hour, not completed, not yet notified)
  */

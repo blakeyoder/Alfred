@@ -84,9 +84,7 @@ export async function initiateDeviceFlow(): Promise<{
  * Polls for the authorization token after user completes the device flow.
  * Returns null if authorization is still pending, throws on error.
  */
-export async function pollForToken(
-  deviceCode: string
-): Promise<TokenResponse | null> {
+async function pollForToken(deviceCode: string): Promise<TokenResponse | null> {
   const { clientId, clientSecret } = getClientCredentials();
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
@@ -145,7 +143,7 @@ export async function storeTokens(
 /**
  * Retrieves decrypted tokens from the database.
  */
-export async function getTokens(userId: string): Promise<StoredTokens | null> {
+async function getTokens(userId: string): Promise<StoredTokens | null> {
   const rows = await sql<
     {
       access_token_encrypted: string;
@@ -176,9 +174,7 @@ export async function getTokens(userId: string): Promise<StoredTokens | null> {
 /**
  * Refreshes an expired access token using the refresh token.
  */
-export async function refreshAccessToken(
-  userId: string
-): Promise<string | null> {
+async function refreshAccessToken(userId: string): Promise<string | null> {
   const tokens = await getTokens(userId);
   if (!tokens) {
     return null;
@@ -250,13 +246,6 @@ export async function hasGoogleAuth(userId: string): Promise<boolean> {
     SELECT COUNT(*)::int as count FROM google_tokens WHERE user_id = ${userId}
   `;
   return rows[0].count > 0;
-}
-
-/**
- * Removes Google tokens for a user.
- */
-export async function revokeGoogleAuth(userId: string): Promise<void> {
-  await sql`DELETE FROM google_tokens WHERE user_id = ${userId}`;
 }
 
 /**

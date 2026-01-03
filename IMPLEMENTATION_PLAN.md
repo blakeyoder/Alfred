@@ -869,11 +869,64 @@ if (process.env.NODE_ENV === 'production') {
 
 ---
 
-## Post-MVP Features (After Telegram)
+## mem0 Memory System
+
+> **📄 Detailed specification: [docs/MEM0_IMPLEMENTATION.md](docs/MEM0_IMPLEMENTATION.md)**
+
+Long-term semantic memory for Alfred using mem0 Cloud. Enables the assistant to remember facts, relationships, and context across conversations.
+
+### Design Summary
+
+| Aspect | Decision |
+|--------|----------|
+| **Scope** | Individual + couple memories |
+| **DM Privacy** | Completely hidden from partner |
+| **Cross-partner** | Proactive sharing allowed |
+| **Creation** | Auto-extract + explicit "remember this" |
+| **Retrieval** | Selective (only when context needed) |
+| **Transparency** | Always cite when using memories |
+| **Commands** | Conversational only (no /memory) |
+| **Deployment** | mem0 Cloud |
+| **Latency** | < 500ms budget |
+
+### Stages Overview
+
+| Stage | Name | Goal | Status |
+|-------|------|------|--------|
+| 14 | mem0 Client & Schema | Client wrapper, DB migration, CRUD operations | Complete |
+| 15 | Memory Retrieval | Inject memories into agent context with privacy filtering | Complete |
+| 16 | Memory Extraction | Auto-extract + explicit "remember" with confirmation | Complete |
+| 17 | Updates & Conflicts | Conflict detection, corrections, soft decay, ambiguity | Complete |
+| 18 | Cross-Partner | Proactive partner sharing + calendar event memory | Complete |
+
+### File Changes
+
+| File | Change |
+|------|--------|
+| `src/integrations/mem0.ts` | New - mem0 client wrapper |
+| `src/types/memory.ts` | New - Memory interfaces |
+| `src/db/migrations/007_memories.sql` | New - memories table |
+| `src/db/queries/memories.ts` | New - memory CRUD operations |
+| `src/agent/memory-context.ts` | New - retrieval logic |
+| `src/agent/memory-extraction.ts` | New - extraction logic |
+| `src/agent/memory-conflicts.ts` | New - conflict resolution |
+| `src/agent/memory-ambiguity.ts` | New - ambiguity handling |
+| `src/agent/index.ts` | Modified - integrate memory hooks |
+| `src/agent/system-prompt.ts` | Modified - include memory context |
+| `src/agent/tools/calendar.ts` | Modified - extract event memories |
+
+### Environment Variable
+
+```bash
+MEM0_API_KEY=m0-...  # Get from https://app.mem0.ai
+```
+
+---
+
+## Post-Memory Features
 
 | Priority | Feature | Description |
 |----------|---------|-------------|
-| 2 | **mem0 Integration** | Long-term semantic memory across sessions |
 | 3 | **Budget Tools** | Google Sheets read-only integration |
 | 4 | **Places Tool** | Google Places API for date suggestions |
 | 5 | **Langfuse** | Observability, tracing, cost tracking |
@@ -899,6 +952,9 @@ ENCRYPTION_KEY=...
 # Google OAuth
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+
+# mem0 (get from https://app.mem0.ai)
+MEM0_API_KEY=...
 ```
 
 ---
@@ -924,7 +980,14 @@ Stage 11:  [Message Routing]   → Chat via Telegram using agent
 Stage 12:  [Commands & UX]     → Polish, formatting, /status
 Stage 13:  [Prod Readiness]    → Webhooks for Railway deployment
            ─────────────────────────────────────────────
-           FUTURE: mem0, Budget, Places, Langfuse, etc.
+mem0 Memory System (Complete):
+Stage 14:  [mem0 Client]       → Client wrapper + DB schema ✓
+Stage 15:  [Retrieval]         → Inject memories into agent context ✓
+Stage 16:  [Extraction]        → Auto-extract + explicit "remember" ✓
+Stage 17:  [Updates]           → Conflicts, corrections, decay ✓
+Stage 18:  [Cross-Partner]     → Proactive sharing + calendar integration ✓
+           ─────────────────────────────────────────────
+           FUTURE: Budget, Places, Langfuse, Web UI, etc.
 ```
 
 ---
@@ -932,6 +995,559 @@ Stage 13:  [Prod Readiness]    → Webhooks for Railway deployment
 ## Open Questions
 
 1. ~~Token encryption~~ → Encrypt from day 1 ✓
-2. ~~mem0 vs Postgres~~ → Defer mem0, use Postgres context ✓
+2. ~~mem0 vs Postgres~~ → mem0 Cloud with Postgres backup ✓
 3. **Budget spreadsheet structure** - Define before implementing budget tool
 4. **Multi-calendar support** - Assume one primary calendar per user for MVP
+5. ~~mem0 memory design~~ → Fully specified in Stages 14-18 ✓
+
+---
+
+## Test Coverage Plan
+
+### Overview
+
+Current state: Only `src/lib/datetime.test.ts` exists (~47 test cases). This plan establishes comprehensive test coverage following TDD principles and avoiding anti-patterns.
+
+### Critical Paths (Priority Order)
+
+| Priority | Path | Risk | Coverage Goal |
+|----------|------|------|---------------|
+| **P0** | Reminder CRUD operations | Core functionality | 95% |
+| **P0** | Assignee resolution (me/partner/both) | User-visible bugs | 100% |
+| **P0** | Encryption/decryption | Security-critical | 100% |
+| **P1** | Calendar event creation | Data integrity | 90% |
+| **P1** | Reservation link generation | User-facing URLs | 100% |
+| **P1** | Web search query handling | External API | 90% |
+| **P2** | Memory extraction/storage | Feature quality | 85% |
+| **P2** | Agent error handling | User experience | 90% |
+| **P3** | Telegram message routing | Adapter layer | 80% |
+
+---
+
+### Stage T1: Pure Function Unit Tests
+**Goal:** Test all pure functions with no external dependencies
+**Status:** Not Started
+
+**Files to Create:**
+
+#### `src/lib/crypto.test.ts`
+```typescript
+// Critical: Encryption is security-critical
+describe('encrypt/decrypt', () => {
+  // Happy path
+  it('roundtrips arbitrary text correctly');
+  it('produces different ciphertext for same plaintext (random IV)');
+  it('produces base64 output');
+
+  // Error cases
+  it('throws when ENCRYPTION_KEY is missing');
+  it('throws when ENCRYPTION_KEY is wrong length');
+  it('throws when decrypting invalid base64');
+  it('throws when decrypting truncated data');
+  it('throws when auth tag is corrupted');
+});
+```
+
+#### `src/agent/tools/reservations.test.ts`
+```typescript
+// Pure URL parsing and generation - no mocking needed
+describe('parseRestaurantUrl', () => {
+  describe('Resy URLs', () => {
+    it('parses resy.com/cities/{city}/venues/{slug}');
+    it('parses resy.com with query params');
+    it('extracts city and slug correctly');
+  });
+
+  describe('OpenTable URLs', () => {
+    it('parses opentable.com/r/{slug}');
+    it('parses opentable.com/{slug} without /r prefix');
+  });
+
+  describe('Tock URLs', () => {
+    it('parses exploretock.com/{slug}');
+    it('parses tock.com/{slug}');
+  });
+
+  it('returns unknown for unsupported domains');
+});
+
+describe('generateResyLink', () => {
+  it('includes date and seats params');
+  it('preserves city in URL when available');
+});
+
+describe('generateOpenTableLink', () => {
+  it('formats dateTime as YYYY-MM-DDTHH:MM');
+  it('includes covers param');
+});
+
+describe('generateTockLink', () => {
+  it('includes date, size, and time params');
+});
+```
+
+#### `src/agent/tools/web-search.test.ts` (partial)
+```typescript
+describe('isRestaurantQuery', () => {
+  it('returns true for "best restaurants"');
+  it('returns true for "sushi near me"');
+  it('returns true for singular forms like "restaurant"');
+  it('returns false for "best laptops"');
+  it('returns false for "weather forecast"');
+});
+
+describe('formatSearchResult', () => {
+  it('formats result with all fields');
+  it('handles missing title');
+  it('handles missing excerpts');
+  it('uses 1-based index');
+});
+```
+
+**Success Criteria:**
+- [ ] All pure functions have tests
+- [ ] No mocking required
+- [ ] 100% line coverage on crypto.ts
+- [ ] All edge cases covered
+
+---
+
+### Stage T2: Tool Business Logic Tests
+**Goal:** Test tool execute functions with mocked DB/API calls
+**Status:** Not Started
+
+**Mocking Strategy:**
+- Mock database queries at the module level
+- Mock external API clients (Parallel, Google)
+- DO NOT mock the tool function itself
+- Test the REAL execute function with fake data
+
+**Files to Create:**
+
+#### `src/agent/tools/reminders.test.ts`
+```typescript
+// Mock the DB queries, not the tool
+jest.mock('../../db/queries/reminders.js');
+
+describe('createReminderTools', () => {
+  const mockCtx = {
+    session: {
+      userId: 'user-1',
+      coupleId: 'couple-1',
+      partnerName: 'Partner',
+      threadId: 'thread-1',
+      visibility: 'shared' as const,
+    },
+  };
+  const partnerId = 'partner-1';
+
+  beforeEach(() => jest.clearAllMocks());
+
+  describe('resolveAssignee', () => {
+    // This is a helper function - test via tool behavior
+    it('assigns to user when "me"');
+    it('assigns to partner when "partner"');
+    it('assigns to undefined when "both"');
+    it('assigns to undefined when no assignee specified');
+  });
+
+  describe('createReminder tool', () => {
+    it('creates reminder with title only');
+    it('creates reminder with due date parsed as Eastern');
+    it('creates reminder assigned to "me"');
+    it('creates reminder assigned to "partner"');
+    it('returns success with reminder ID');
+  });
+
+  describe('listReminders tool', () => {
+    it('lists all reminders by default');
+    it('filters by upcoming');
+    it('filters by overdue');
+    it('filters by assignedTo');
+    it('returns empty message when no reminders');
+    it('formats assigned_to as "you" or partner name');
+  });
+
+  describe('completeReminder tool', () => {
+    it('completes existing reminder');
+    it('returns error for non-existent reminder');
+    it('returns error when reminder belongs to different couple');
+    it('returns error when already completed');
+  });
+});
+```
+
+#### `src/agent/tools/calendar.test.ts`
+```typescript
+jest.mock('../../integrations/google-calendar.js');
+jest.mock('../../integrations/google-auth.js');
+jest.mock('../../db/queries/couples.js');
+jest.mock('../../db/queries/memories.js');
+
+describe('createCalendarTools', () => {
+  describe('getCalendarEvents tool', () => {
+    it('returns events for date range');
+    it('returns error when no shared calendar configured');
+    it('returns error when Google not connected');
+    it('handles Google API errors gracefully');
+  });
+
+  describe('findFreeTime tool', () => {
+    it('finds free slots when both partners connected');
+    it('returns error when no partner');
+    it('returns error when partner not connected');
+    it('handles no free time found');
+  });
+
+  describe('createCalendarEvent tool', () => {
+    describe('shared calendar', () => {
+      it('creates event on shared calendar');
+      it('extracts memories from event title');
+      it('returns error when no shared calendar');
+    });
+
+    describe('individual calendars', () => {
+      it('creates on "me" calendar');
+      it('creates on "partner" calendar');
+      it('creates on "both" calendars');
+      it('handles partial success (one fails)');
+    });
+  });
+
+  describe('extractCalendarMemories', () => {
+    it('extracts meeting person from "meeting with X"');
+    it('extracts birthday from "X birthday"');
+    it('skips generic terms like "doctor"');
+    it('handles extraction failures silently');
+  });
+});
+```
+
+#### `src/agent/tools/web-search.test.ts` (integration)
+```typescript
+jest.mock('../../integrations/parallel.js');
+
+describe('createWebSearchTools', () => {
+  describe('webSearch tool', () => {
+    it('performs basic search');
+    it('enhances query with location');
+    it('adds preferred sources for restaurant queries');
+    it('excludes Yelp and TripAdvisor');
+    it('handles no results');
+    it('handles API errors');
+  });
+
+  describe('webExtract tool', () => {
+    it('extracts content from URL');
+    it('includes focus in request');
+    it('handles extraction errors');
+  });
+
+  describe('webChat tool', () => {
+    it('answers question with context');
+    it('returns tokens used');
+    it('handles API errors');
+  });
+});
+```
+
+**Success Criteria:**
+- [ ] All tool execute functions tested
+- [ ] Mocks verify correct arguments passed to dependencies
+- [ ] Error paths covered
+- [ ] No actual DB or API calls in tests
+
+---
+
+### Stage T3: Database Query Logic Tests
+**Goal:** Test queries with complex logic against real database
+**Status:** Not Started
+
+**Scope:** Only queries with non-trivial logic - filtering, privacy, date comparisons. Skip simple CRUD.
+
+**Strategy:**
+- Use test database (Docker PostgreSQL)
+- Run migrations before test suite
+- Clean tables between tests
+- Focus on behavior, not "does SQL work"
+
+**Test Utilities:**
+
+#### `src/test/db-setup.ts`
+```typescript
+import { sql } from '../db/client.js';
+
+export async function cleanTables() {
+  await sql`TRUNCATE reminders, messages, conversation_participants,
+            conversation_threads, couple_members, couples, users CASCADE`;
+}
+
+export async function createTestCouple() {
+  // Returns { user1, user2, couple, sharedThread, user1DmThread }
+}
+```
+
+#### `src/db/queries/reminders.integration.test.ts`
+```typescript
+// Only testing filter logic - not basic CRUD
+describe('getReminders filter logic', () => {
+  beforeEach(async () => {
+    await cleanTables();
+    // Seed: past-due, future-due, completed, assigned, unassigned
+  });
+
+  describe('upcoming filter', () => {
+    it('includes future due dates');
+    it('includes null due dates');
+    it('excludes past due dates');
+    it('excludes completed reminders');
+  });
+
+  describe('overdue filter', () => {
+    it('includes past due dates only');
+    it('excludes null due dates');
+    it('excludes completed reminders');
+  });
+
+  describe('assignedTo filter', () => {
+    it('returns reminders assigned to specific user');
+    it('ALSO returns unassigned (null) reminders'); // Key behavior!
+    it('excludes reminders assigned to other users');
+  });
+});
+
+describe('getRemindersToNotify', () => {
+  it('returns due within 1 hour window');
+  it('excludes outside window (too early, too late)');
+  it('excludes already notified');
+  it('excludes completed');
+});
+```
+
+#### `src/db/queries/threads.integration.test.ts`
+```typescript
+// Privacy constraint testing
+describe('thread visibility', () => {
+  let user1, user2, sharedThread, user1Dm, user2Dm;
+
+  beforeEach(async () => {
+    // Setup couple with shared + DM threads
+  });
+
+  describe('getThreadsForUser', () => {
+    it('user1 sees shared thread');
+    it('user1 sees own DM thread');
+    it('user1 does NOT see user2 DM thread'); // Critical!
+    it('user2 does NOT see user1 DM thread'); // Critical!
+  });
+
+  describe('getMessages', () => {
+    it('user can read messages from shared thread');
+    it('user can read messages from own DM');
+    it('user CANNOT read messages from partner DM'); // Critical!
+  });
+});
+```
+
+#### `src/db/queries/memories.integration.test.ts`
+```typescript
+describe('memory visibility', () => {
+  it('shared memories visible to both partners');
+  it('DM memories visible only to owner'); // If applicable
+});
+```
+
+**What We're NOT Testing:**
+- Basic INSERT/SELECT (trust postgres)
+- Simple lookups by ID
+- Schema constraints (tested by migrations)
+
+**Success Criteria:**
+- [ ] Filter logic behaves correctly at boundaries
+- [ ] Privacy constraints enforced (DM isolation)
+- [ ] assignedTo includes NULL reminders (key behavior)
+- [ ] Notification window logic correct
+
+---
+
+### Stage T4: Integration Tests
+**Goal:** Test end-to-end flows without external APIs
+**Status:** Not Started
+
+**Strategy:**
+- Mock only external APIs (OpenAI, Google, Parallel)
+- Use real database
+- Test complete tool execution paths
+
+#### `src/agent/index.test.ts`
+```typescript
+jest.mock('@ai-sdk/openai');
+jest.mock('../integrations/google-calendar.js');
+jest.mock('../integrations/parallel.js');
+
+describe('chat function', () => {
+  describe('basic conversation', () => {
+    it('returns text response from model');
+    it('includes message history in context');
+    it('applies system prompt with session context');
+  });
+
+  describe('tool execution', () => {
+    it('executes single tool and returns result');
+    it('handles multiple tool calls in sequence');
+    it('respects stepCountIs limit');
+  });
+
+  describe('error handling', () => {
+    it('wraps NoSuchToolError with friendly message');
+    it('wraps InvalidToolInputError with tool name');
+    it('handles rate limiting (429)');
+    it('handles timeout with AbortError');
+  });
+
+  describe('memory integration', () => {
+    it('retrieves memories for relevant queries');
+    it('skips memory retrieval for simple queries');
+    it('extracts memories from response');
+    it('handles memory errors gracefully');
+  });
+});
+```
+
+**Success Criteria:**
+- [ ] Full request/response flow tested
+- [ ] Tool chaining works correctly
+- [ ] Error boundaries verified
+- [ ] Memory hooks integrated
+
+---
+
+### Stage T5: Telegram Adapter Tests
+**Goal:** Test Telegram-specific logic
+**Status:** Not Started
+
+#### `src/adapters/telegram/bot.test.ts`
+```typescript
+describe('Telegram commands', () => {
+  describe('/link', () => {
+    it('links valid code to telegram account');
+    it('rejects invalid code');
+    it('rejects expired code');
+    it('handles already linked account');
+  });
+
+  describe('/unlink', () => {
+    it('removes telegram_id from user');
+    it('handles not linked');
+  });
+
+  describe('/status', () => {
+    it('shows user info when linked');
+    it('shows instructions when not linked');
+  });
+
+  describe('/auth', () => {
+    it('initiates device authorization flow');
+    it('handles user not linked');
+  });
+
+  describe('/calendar', () => {
+    it('lists calendars with /calendar list');
+    it('sets calendar with /calendar set <id>');
+    it('shows current with /calendar show');
+  });
+});
+
+describe('message handling', () => {
+  it('routes text to agent for linked users');
+  it('prompts /link for unlinked users');
+  it('shows typing indicator during processing');
+  it('chunks long responses');
+  it('formats markdown for Telegram');
+});
+```
+
+---
+
+### Mocking Boundaries
+
+| Layer | Mock? | Reason |
+|-------|-------|--------|
+| **Pure functions** | Never | No side effects |
+| **Database queries** | Sometimes | Mock for unit tests, real for integration |
+| **External APIs** | Always | OpenAI, Google, Parallel |
+| **Tool execute()** | Never | Test real behavior |
+| **Crypto module** | Never | Test real encryption |
+| **File system** | Sometimes | Only for session persistence |
+
+### Anti-Patterns to Avoid
+
+Per the testing-anti-patterns skill:
+
+1. **Never test mock behavior** - If asserting on mock, delete the test
+2. **Never add test-only methods** - Use test utilities instead
+3. **Understand before mocking** - Know what side effects you're bypassing
+4. **Complete mocks** - Mirror full API response structure
+5. **Tests with TDD** - Write failing test first, then implement
+
+### Test Infrastructure
+
+```bash
+# Run all tests
+bun run test
+
+# Run specific test file
+bun run test reminders.test.ts
+
+# Run with coverage
+bun run test --coverage
+
+# Run integration tests (requires Docker DB)
+bun run test:integration
+```
+
+**Package.json additions:**
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:integration": "docker compose up -d && jest --testPathPattern=integration && docker compose down"
+  }
+}
+```
+
+### Implementation Order
+
+1. **Stage T1** - Pure functions (no setup needed)
+2. **Stage T2** - Tool logic with mocks (fast feedback)
+3. **Stage T3** - Database queries (requires Docker)
+4. **Stage T4** - Integration tests (complex setup)
+5. **Stage T5** - Telegram adapter (after core is stable)
+
+### Coverage Targets
+
+| Module | Target | Current |
+|--------|--------|---------|
+| `src/lib/` | 100% | ~60% (datetime only) |
+| `src/agent/tools/` | 95% | 0% |
+| `src/db/queries/` | 90% | 0% |
+| `src/agent/` | 85% | 0% |
+| `src/adapters/telegram/` | 80% | 0% |
+| `src/integrations/` | 70% | 0% |
+
+### Estimated Test Files
+
+| File | Tests | Priority |
+|------|-------|----------|
+| `crypto.test.ts` | ~10 | P0 |
+| `reservations.test.ts` | ~15 | P1 |
+| `reminders.test.ts` (tool) | ~20 | P0 |
+| `calendar.test.ts` (tool) | ~25 | P1 |
+| `web-search.test.ts` | ~15 | P1 |
+| `reminders.integration.test.ts` | ~12 | P0 |
+| `threads.integration.test.ts` | ~8 | P0 |
+| `memories.integration.test.ts` | ~4 | P2 |
+| `agent/index.test.ts` | ~20 | P1 |
+| `telegram/bot.test.ts` | ~25 | P3 |
+| **Total** | **~154** | |

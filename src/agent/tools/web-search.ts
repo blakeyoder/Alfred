@@ -19,7 +19,7 @@ const webSearchSchema = z.object({
     .optional()
     .describe(
       "Location context (city, zip, or address) if the search is location-specific. " +
-        "Infer from conversation history when possible, or ask the user if needed.",
+        "Infer from conversation history when possible, or ask the user if needed."
     ),
   maxResults: z
     .number()
@@ -36,7 +36,7 @@ const webExtractSchema = z.object({
     .string()
     .optional()
     .describe(
-      "What aspect to focus on extracting (e.g., 'menu and prices', 'hours and location')",
+      "What aspect to focus on extracting (e.g., 'menu and prices', 'hours and location')"
     ),
 });
 
@@ -45,13 +45,13 @@ const webChatSchema = z.object({
     .string()
     .describe(
       "Follow-up question about previous search results. " +
-        "Use when the user wants more details about something already found.",
+        "Use when the user wants more details about something already found."
     ),
   context: z
     .string()
     .describe(
       "Relevant context from previous search results (URLs, excerpts, etc.) " +
-        "to help answer the question accurately.",
+        "to help answer the question accurately."
     ),
 });
 
@@ -110,7 +110,7 @@ function isRestaurantQuery(query: string): boolean {
   return RESTAURANT_KEYWORDS.some(
     (keyword) =>
       lowerQuery.includes(keyword) ||
-      lowerQuery.includes(keyword.replace(/s$/, "")),
+      lowerQuery.includes(keyword.replace(/s$/, ""))
   );
 }
 
@@ -118,7 +118,7 @@ function isRestaurantQuery(query: string): boolean {
 
 function formatSearchResult(
   result: SearchResult,
-  index: number,
+  index: number
 ): {
   index: number;
   title: string;
@@ -137,7 +137,7 @@ function formatSearchResult(
 
 export function createWebSearchTools(
   _ctx: ToolContext,
-  _partnerId: string | null,
+  _partnerId: string | null
 ) {
   return {
     webSearch: tool({

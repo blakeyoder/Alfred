@@ -119,7 +119,7 @@ function getApiKey(): string {
 async function makeParallelRequest<TResponse>(
   endpoint: string,
   body: unknown,
-  options: { useBetaHeader?: boolean } = {},
+  options: { useBetaHeader?: boolean } = {}
 ): Promise<TResponse> {
   const apiKey = getApiKey();
 
@@ -161,7 +161,7 @@ export async function search(request: SearchRequest): Promise<SearchResponse> {
  * Returns LLM-ready markdown content.
  */
 export async function extract(
-  request: ExtractRequest,
+  request: ExtractRequest
 ): Promise<ExtractResponse> {
   // Transform to API format (urls array)
   const apiRequest: ExtractApiRequest = {
@@ -172,7 +172,7 @@ export async function extract(
   const response = await makeParallelRequest<ExtractApiResponse>(
     "/v1beta/extract",
     apiRequest,
-    { useBetaHeader: true },
+    { useBetaHeader: true }
   );
 
   // Return first result (we only requested one URL)
@@ -189,7 +189,7 @@ export async function extract(
  * OpenAI ChatCompletions compatible.
  */
 export async function chatWithContext(
-  request: ChatRequest,
+  request: ChatRequest
 ): Promise<ChatResponse> {
   return makeParallelRequest<ChatResponse>("/v1/chat/completions", request);
 }

@@ -116,7 +116,7 @@ function markdownToTelegramHtml(text: string): string {
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
     (_, linkText, url) =>
-      `<a href="${url.replace(/&amp;/g, "&")}">${linkText}</a>`,
+      `<a href="${url.replace(/&amp;/g, "&")}">${linkText}</a>`
   );
 
   // Convert **bold** to <b>bold</b>
@@ -142,13 +142,13 @@ export function createBot(token: string): Telegraf {
 
     if (user) {
       await ctx.reply(
-        `Welcome back, ${user.name}! Just send me a message and I'll help you and your partner stay organized.`,
+        `Welcome back, ${user.name}! Just send me a message and I'll help you and your partner stay organized.`
       );
     } else {
       await ctx.reply(
         "Welcome to Alfred! To get started, link your account:\n\n" +
           "/link <your-email>\n\n" +
-          "Example: /link blake@example.com",
+          "Example: /link blake@example.com"
       );
     }
   });
@@ -162,7 +162,7 @@ export function createBot(token: string): Telegraf {
     if (existingUser) {
       await ctx.reply(
         `You're already linked as ${existingUser.name} (${existingUser.email}).\n\n` +
-          "Use /unlink to disconnect first if you want to switch accounts.",
+          "Use /unlink to disconnect first if you want to switch accounts."
       );
       return;
     }
@@ -173,7 +173,7 @@ export function createBot(token: string): Telegraf {
 
     if (!email) {
       await ctx.reply(
-        "Usage: /link <your-email>\n\nExample: /link blake@example.com",
+        "Usage: /link <your-email>\n\nExample: /link blake@example.com"
       );
       return;
     }
@@ -184,14 +184,14 @@ export function createBot(token: string): Telegraf {
     if (!user) {
       await ctx.reply(
         `No account found for ${email}.\n\n` +
-          "Make sure you use the email from your Alfred account.",
+          "Make sure you use the email from your Alfred account."
       );
       return;
     }
 
     await ctx.reply(
       `Linked! You're connected as ${user.name} (${user.email}).\n\n` +
-        "Send me a message to get started!",
+        "Send me a message to get started!"
     );
   });
 
@@ -207,7 +207,7 @@ export function createBot(token: string): Telegraf {
 
     await unlinkTelegramAccount(telegramId);
     await ctx.reply(
-      `Unlinked from ${user.email}.\n\nUse /link <email> to connect a different account.`,
+      `Unlinked from ${user.email}.\n\nUse /link <email> to connect a different account.`
     );
   });
 
@@ -226,7 +226,7 @@ export function createBot(token: string): Telegraf {
     if (hasAuth) {
       await ctx.reply(
         "You're already connected to Google Calendar.\n\n" +
-          "Use /calendar to manage your shared calendar.",
+          "Use /calendar to manage your shared calendar."
       );
       return;
     }
@@ -240,14 +240,14 @@ export function createBot(token: string): Telegraf {
         "To connect Google Calendar:\n\n" +
           `1. Open: ${flow.verificationUrl}\n` +
           `2. Enter code: ${flow.userCode}\n\n` +
-          "Waiting for you to complete authorization...",
+          "Waiting for you to complete authorization..."
       );
 
       // Poll for completion (with timeout)
       const tokens = await completeDeviceFlow(
         flow.deviceCode,
         flow.interval,
-        flow.expiresIn,
+        flow.expiresIn
       );
 
       const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
@@ -258,12 +258,12 @@ export function createBot(token: string): Telegraf {
         tokens.access_token,
         tokens.refresh_token,
         expiresAt,
-        scopes,
+        scopes
       );
 
       await ctx.reply(
         "Google Calendar connected successfully!\n\n" +
-          "Use /calendar list to see your calendars and set up a shared one.",
+          "Use /calendar list to see your calendars and set up a shared one."
       );
     } catch (error) {
       if (error instanceof Error) {
@@ -298,7 +298,7 @@ export function createBot(token: string): Telegraf {
         const hasAuth = await hasGoogleAuth(user.id);
         if (!hasAuth) {
           await ctx.reply(
-            "You need to connect Google Calendar first.\n\nUse /auth to get started.",
+            "You need to connect Google Calendar first.\n\nUse /auth to get started."
           );
           return;
         }
@@ -306,7 +306,7 @@ export function createBot(token: string): Telegraf {
         try {
           const calendars = await listCalendars(user.id);
           const currentShared = await getSharedCalendarId(
-            session.context.coupleId,
+            session.context.coupleId
           );
 
           if (calendars.length === 0) {
@@ -326,7 +326,7 @@ export function createBot(token: string): Telegraf {
           await ctx.reply(message);
         } catch (error) {
           await ctx.reply(
-            `Failed to list calendars: ${error instanceof Error ? error.message : "Unknown error"}`,
+            `Failed to list calendars: ${error instanceof Error ? error.message : "Unknown error"}`
           );
         }
         break;
@@ -337,7 +337,7 @@ export function createBot(token: string): Telegraf {
         if (!calendarId) {
           await ctx.reply(
             "Usage: /calendar set <calendar_id>\n\n" +
-              "Use /calendar list to see available calendar IDs.",
+              "Use /calendar list to see available calendar IDs."
           );
           return;
         }
@@ -347,7 +347,7 @@ export function createBot(token: string): Telegraf {
           await ctx.reply(`Shared calendar set to:\n${calendarId}`);
         } catch (error) {
           await ctx.reply(
-            `Failed to set calendar: ${error instanceof Error ? error.message : "Unknown error"}`,
+            `Failed to set calendar: ${error instanceof Error ? error.message : "Unknown error"}`
           );
         }
         break;
@@ -355,14 +355,14 @@ export function createBot(token: string): Telegraf {
 
       case "show": {
         const currentShared = await getSharedCalendarId(
-          session.context.coupleId,
+          session.context.coupleId
         );
         if (currentShared) {
           await ctx.reply(`Shared calendar:\n${currentShared}`);
         } else {
           await ctx.reply(
             "No shared calendar configured.\n\n" +
-              "Use /calendar list to see available calendars.",
+              "Use /calendar list to see available calendars."
           );
         }
         break;
@@ -373,7 +373,7 @@ export function createBot(token: string): Telegraf {
           "Calendar commands:\n\n" +
             "/calendar list - List writable calendars\n" +
             "/calendar set <id> - Set shared calendar\n" +
-            "/calendar show - Show current shared calendar",
+            "/calendar show - Show current shared calendar"
         );
     }
   });
@@ -392,7 +392,7 @@ export function createBot(token: string): Telegraf {
     if (!session) {
       await ctx.reply(
         `Linked as ${user.name} (${user.email})\n\n` +
-          "But no couple found. Make sure you're part of a couple in the system.",
+          "But no couple found. Make sure you're part of a couple in the system."
       );
       return;
     }
@@ -401,7 +401,7 @@ export function createBot(token: string): Telegraf {
       `Account: ${session.context.userName} (${user.email})\n` +
         `Couple: ${session.context.coupleName ?? "Unnamed"}\n` +
         `Partner: ${session.context.partnerName ?? "None"}\n` +
-        `Thread: ${session.context.visibility}`,
+        `Thread: ${session.context.visibility}`
     );
   });
 
@@ -413,7 +413,7 @@ export function createBot(token: string): Telegraf {
     if (chatType !== "group" && chatType !== "supergroup") {
       await ctx.reply(
         "The /setup command only works in group chats.\n\n" +
-          "Add me to a group with your partner, then run /setup there.",
+          "Add me to a group with your partner, then run /setup there."
       );
       return;
     }
@@ -426,7 +426,7 @@ export function createBot(token: string): Telegraf {
     if (!user) {
       await ctx.reply(
         "You need to link your account first.\n\n" +
-          "DM me and use /link <email> to connect your account.",
+          "DM me and use /link <email> to connect your account."
       );
       return;
     }
@@ -435,7 +435,7 @@ export function createBot(token: string): Telegraf {
     const couple = await getCoupleForUser(user.id);
     if (!couple) {
       await ctx.reply(
-        "You're not part of a couple yet. Contact support to get set up.",
+        "You're not part of a couple yet. Contact support to get set up."
       );
       return;
     }
@@ -453,7 +453,7 @@ export function createBot(token: string): Telegraf {
     await ctx.reply(
       `Group linked to ${couple.name ?? "your couple"}!\n\n` +
         "Both partners can now chat with me here. " +
-        "I'll also send reminder notifications to this group.",
+        "I'll also send reminder notifications to this group."
     );
   });
 
@@ -472,7 +472,7 @@ export function createBot(token: string): Telegraf {
         "/calendar list - List calendars\n" +
         "/calendar set <id> - Set shared calendar\n" +
         "/calendar show - Show shared calendar\n\n" +
-        "Just send a message to chat with your EA!",
+        "Just send a message to chat with your EA!"
     );
   });
 
@@ -495,7 +495,7 @@ export function createBot(token: string): Telegraf {
         return;
       }
       await ctx.reply(
-        "Please link your account first:\n/link <your-email>\n\nExample: /link blake@example.com",
+        "Please link your account first:\n/link <your-email>\n\nExample: /link blake@example.com"
       );
       return;
     }
@@ -509,7 +509,7 @@ export function createBot(token: string): Telegraf {
         // Group not set up - prompt to set up
         await ctx.reply(
           "This group isn't set up yet.\n\n" +
-            "Run /setup to link this group to your couple.",
+            "Run /setup to link this group to your couple."
         );
         return;
       }
@@ -526,7 +526,7 @@ export function createBot(token: string): Telegraf {
     const session = await buildSessionContext(user.id);
     if (!session) {
       await ctx.reply(
-        "Unable to find your couple. Make sure you're set up in the system.",
+        "Unable to find your couple. Make sure you're set up in the system."
       );
       return;
     }
@@ -543,7 +543,7 @@ export function createBot(token: string): Telegraf {
       // Load conversation history
       const dbMessages = await getRecentMessagesForContext(
         session.threadId,
-        50,
+        50
       );
       const history: ModelMessage[] = dbMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
@@ -566,7 +566,7 @@ export function createBot(token: string): Telegraf {
         "assistant",
         result.text,
         undefined,
-        result.toolCalls,
+        result.toolCalls
       );
 
       // Send response (split if too long)
@@ -608,7 +608,7 @@ export function createBot(token: string): Telegraf {
     }
 
     await ctx.reply(
-      "I can only process text messages right now. Send me a text message!",
+      "I can only process text messages right now. Send me a text message!"
     );
   });
 

@@ -1,17 +1,9 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  scrypt,
-} from "crypto";
-import { promisify } from "util";
+import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
-
-const scryptAsync = promisify(scrypt);
 
 function getEncryptionKey(): Buffer {
   const key = process.env.ENCRYPTION_KEY;
@@ -75,11 +67,4 @@ export function decrypt(encryptedBase64: string): string {
   ]);
 
   return decrypted.toString("utf8");
-}
-
-/**
- * Generates a random encryption key (32 bytes / 64 hex chars)
- */
-export function generateEncryptionKey(): string {
-  return randomBytes(KEY_LENGTH).toString("hex");
 }

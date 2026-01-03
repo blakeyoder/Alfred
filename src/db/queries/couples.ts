@@ -9,14 +9,6 @@ export interface Couple {
   created_at: Date;
 }
 
-export interface CoupleWithMembers extends Couple {
-  members: Array<{
-    user_id: string;
-    role: "partner1" | "partner2";
-    user: User;
-  }>;
-}
-
 export async function getCoupleById(id: string): Promise<Couple | null> {
   const rows = await sql<Couple[]>`
     SELECT * FROM couples WHERE id = ${id}
@@ -24,9 +16,7 @@ export async function getCoupleById(id: string): Promise<Couple | null> {
   return rows[0] ?? null;
 }
 
-export async function getCoupleForUser(
-  userId: string
-): Promise<Couple | null> {
+export async function getCoupleForUser(userId: string): Promise<Couple | null> {
   const rows = await sql<Couple[]>`
     SELECT c.* FROM couples c
     JOIN couple_members cm ON cm.couple_id = c.id
@@ -67,29 +57,6 @@ export async function addCoupleMembers(
       (${coupleId}, ${user1Id}, 'partner1'),
       (${coupleId}, ${user2Id}, 'partner2')
   `;
-}
-
-export async function createCoupleWithMembers(
-  user1Id: string,
-  user2Id: string,
-  name?: string
-): Promise<Couple> {
-  return sql.begin(async (tx) => {
-    const [couple] = await tx<Couple[]>`
-      INSERT INTO couples (name)
-      VALUES (${name ?? null})
-      RETURNING *
-    `;
-
-    await tx`
-      INSERT INTO couple_members (couple_id, user_id, role)
-      VALUES
-        (${couple.id}, ${user1Id}, 'partner1'),
-        (${couple.id}, ${user2Id}, 'partner2')
-    `;
-
-    return couple;
-  });
 }
 
 export async function getSharedCalendarId(

@@ -10,23 +10,6 @@ export interface Message {
   created_at: Date;
 }
 
-export async function getMessages(
-  userId: string,
-  threadId: string,
-  limit = 50
-): Promise<Message[]> {
-  // Only return messages from threads user can access
-  const rows = await sql<Message[]>`
-    SELECT m.* FROM messages m
-    JOIN conversation_participants cp ON cp.thread_id = m.thread_id
-    WHERE cp.user_id = ${userId}
-      AND m.thread_id = ${threadId}
-    ORDER BY m.created_at ASC
-    LIMIT ${limit}
-  `;
-  return rows;
-}
-
 export async function saveMessage(
   threadId: string,
   role: Message["role"],

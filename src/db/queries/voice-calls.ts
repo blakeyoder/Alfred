@@ -3,13 +3,22 @@
  */
 import { sql } from "../client.js";
 
+export type VoiceAgentType = "restaurant" | "medical" | "general";
+export type CallPurpose =
+  | "reservation"
+  | "confirmation"
+  | "inquiry"
+  | "appointment"
+  | "other";
+
 export interface VoiceCall {
   id: string;
   couple_id: string;
   initiated_by: string;
   conversation_id: string | null;
   call_sid: string | null;
-  call_type: "reservation" | "confirmation" | "personal" | "other";
+  agent_type: VoiceAgentType;
+  call_purpose: CallPurpose;
   to_number: string;
   to_name: string | null;
   instructions: string;
@@ -37,7 +46,8 @@ export interface VoiceCall {
 export async function createVoiceCall(
   coupleId: string,
   initiatedBy: string,
-  callType: VoiceCall["call_type"],
+  agentType: VoiceAgentType,
+  callPurpose: CallPurpose,
   toNumber: string,
   instructions: string,
   options?: {
@@ -46,11 +56,12 @@ export async function createVoiceCall(
   }
 ): Promise<VoiceCall> {
   const rows = await sql<VoiceCall[]>`
-    INSERT INTO voice_calls (couple_id, initiated_by, call_type, to_number, to_name, instructions, dynamic_variables)
+    INSERT INTO voice_calls (couple_id, initiated_by, agent_type, call_purpose, to_number, to_name, instructions, dynamic_variables)
     VALUES (
       ${coupleId},
       ${initiatedBy},
-      ${callType},
+      ${agentType},
+      ${callPurpose},
       ${toNumber},
       ${options?.toName ?? null},
       ${instructions},

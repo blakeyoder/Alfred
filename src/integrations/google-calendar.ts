@@ -228,9 +228,7 @@ export async function findFreeTime(
         }
       }
     }
-    currentTime = new Date(
-      Math.max(currentTime.getTime(), busy.end.getTime())
-    );
+    currentTime = new Date(Math.max(currentTime.getTime(), busy.end.getTime()));
   }
 
   // Check remaining time after last busy period

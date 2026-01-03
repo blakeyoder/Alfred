@@ -5,6 +5,53 @@
 
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io";
 
+// ============ Voice Agent Types ============
+
+/**
+ * Specialized voice agent types for different call scenarios.
+ * Each type maps to a dedicated ElevenLabs agent with optimized prompts.
+ */
+export type VoiceAgentType = "restaurant" | "medical" | "general";
+
+/**
+ * Get the ElevenLabs agent ID for a specific voice agent type.
+ * Falls back to general agent if the specific type is not configured.
+ */
+export function getVoiceAgentId(agentType: VoiceAgentType): string {
+  const agentIds: Record<VoiceAgentType, string | undefined> = {
+    restaurant: process.env.ELEVENLABS_AGENT_RESTAURANT,
+    medical: process.env.ELEVENLABS_AGENT_MEDICAL,
+    general: process.env.ELEVENLABS_AGENT_GENERAL,
+  };
+
+  // Try the specific agent first, fall back to general
+  const specificAgent = agentIds[agentType];
+  if (specificAgent) {
+    return specificAgent;
+  }
+
+  const generalAgent = agentIds.general;
+  if (generalAgent) {
+    console.log(
+      `[elevenlabs] No agent configured for type "${agentType}", using general agent`
+    );
+    return generalAgent;
+  }
+
+  // Legacy fallback to old single agent ID
+  const legacyAgent = process.env.ELEVENLABS_AGENT_ID;
+  if (legacyAgent) {
+    console.log(
+      `[elevenlabs] No typed agents configured, using legacy ELEVENLABS_AGENT_ID`
+    );
+    return legacyAgent;
+  }
+
+  throw new Error(
+    `No ElevenLabs agent configured. Set ELEVENLABS_AGENT_GENERAL or ELEVENLABS_AGENT_ID.`
+  );
+}
+
 // ============ Types ============
 
 export interface OutboundCallRequest {
