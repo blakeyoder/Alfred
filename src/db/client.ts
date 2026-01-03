@@ -10,6 +10,7 @@ export const sql = postgres(connectionString, {
   max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
+  max_lifetime: 60 * 30, // Refresh connections every 30 minutes
 });
 
 export async function closeConnection(): Promise<void> {
