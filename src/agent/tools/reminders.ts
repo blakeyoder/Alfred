@@ -26,8 +26,14 @@ function resolveAssignee(
 
 const createReminderSchema = z.object({
   title: z.string().describe("What to remember"),
-  dueAt: z.iso.datetime().optional().describe("ISO datetime when due (e.g., 2024-01-15T14:00:00Z)"),
-  assignedTo: z.enum(["me", "partner", "both"]).optional().describe("Who the reminder is for"),
+  dueAt: z.iso
+    .datetime()
+    .optional()
+    .describe("ISO datetime when due (e.g., 2024-01-15T14:00:00Z)"),
+  assignedTo: z
+    .enum(["me", "partner", "both"])
+    .optional()
+    .describe("Who the reminder is for"),
   notes: z.string().optional().describe("Additional notes"),
 });
 
@@ -54,17 +60,22 @@ export function createReminderTools(ctx: ToolContext, partnerId: string | null) 
       execute: async ({ title, dueAt, assignedTo, notes }) => {
         const assignee = resolveAssignee(assignedTo, ctx, partnerId);
 
-        const reminder = await createReminder(ctx.session.coupleId, title, ctx.session.userId, {
-          notes,
-          dueAt: dueAt ? new Date(dueAt) : undefined,
-          assignedTo: assignee,
-        });
+        const reminder = await createReminder(
+          ctx.session.coupleId,
+          title,
+          ctx.session.userId,
+          {
+            notes,
+            dueAt: dueAt ? new Date(dueAt) : undefined,
+            assignedTo: assignee,
+          }
+        );
 
         const assignedToText = assignedTo
           ? assignedTo === "me"
             ? "you"
             : assignedTo === "partner"
-              ? (ctx.session.partnerName ?? "your partner")
+              ? ctx.session.partnerName ?? "your partner"
               : "both of you"
           : "both of you";
 
@@ -110,7 +121,7 @@ export function createReminderTools(ctx: ToolContext, partnerId: string | null) 
             assignedTo: r.assigned_to
               ? r.assigned_to === ctx.session.userId
                 ? "you"
-                : (ctx.session.partnerName ?? "partner")
+                : ctx.session.partnerName ?? "partner"
               : "both",
           })),
         };

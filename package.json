@@ -12,11 +12,7 @@
     "seed:demo": "bun run src/scripts/seed-demo.ts",
     "seed:prod": "bun run dist/scripts/seed-prod.js",
     "db:setup": "bun run migrate:prod && bun run seed:prod",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
-    "format": "prettier --write src/",
-    "format:check": "prettier --check src/"
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "ai",
@@ -27,14 +23,9 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.3",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.7.4",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.51.0"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.2",

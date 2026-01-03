@@ -18,7 +18,11 @@ const getCalendarEventsSchema = z.object({
 const findFreeTimeSchema = z.object({
   startDate: z.iso.date().describe("Start date (YYYY-MM-DD)"),
   endDate: z.iso.date().describe("End date (YYYY-MM-DD)"),
-  minDurationMinutes: z.number().optional().default(60).describe("Minimum duration in minutes"),
+  minDurationMinutes: z
+    .number()
+    .optional()
+    .default(60)
+    .describe("Minimum duration in minutes"),
 });
 
 const createCalendarEventSchema = z.object({
@@ -36,10 +40,14 @@ const createCalendarEventSchema = z.object({
     ),
 });
 
-export function createCalendarTools(ctx: ToolContext, partnerId: string | null) {
+export function createCalendarTools(
+  ctx: ToolContext,
+  partnerId: string | null
+) {
   return {
     getCalendarEvents: tool({
-      description: "Get calendar events in a date range from the shared couple calendar",
+      description:
+        "Get calendar events in a date range from the shared couple calendar",
       inputSchema: getCalendarEventsSchema,
       execute: async ({ startDate, endDate }) => {
         // Get the shared calendar ID for the couple
@@ -58,13 +66,19 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
         if (!hasAuth) {
           return {
             success: false,
-            message: "You need to connect Google Calendar first. Use /auth to connect.",
+            message:
+              "You need to connect Google Calendar first. Use /auth to connect.",
             events: [],
           };
         }
 
         try {
-          const events = await getEvents(ctx.session.userId, startDate, endDate, sharedCalendarId);
+          const events = await getEvents(
+            ctx.session.userId,
+            startDate,
+            endDate,
+            sharedCalendarId
+          );
 
           return {
             success: true,
@@ -75,7 +89,8 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
         } catch (error) {
           return {
             success: false,
-            message: error instanceof Error ? error.message : "Failed to fetch events",
+            message:
+              error instanceof Error ? error.message : "Failed to fetch events",
             events: [],
           };
         }
@@ -140,7 +155,8 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
         } catch (error) {
           return {
             success: false,
-            message: error instanceof Error ? error.message : "Failed to find free time",
+            message:
+              error instanceof Error ? error.message : "Failed to find free time",
             freeSlots: [],
           };
         }
@@ -150,10 +166,19 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
     createCalendarEvent: tool({
       description: "Create a calendar event",
       inputSchema: createCalendarEventSchema,
-      execute: async ({ title, startTime, endTime, description, location, whose = "shared" }) => {
+      execute: async ({
+        title,
+        startTime,
+        endTime,
+        description,
+        location,
+        whose = "shared",
+      }) => {
         // Handle shared calendar case
         if (whose === "shared") {
-          const sharedCalendarId = await getSharedCalendarId(ctx.session.coupleId);
+          const sharedCalendarId = await getSharedCalendarId(
+            ctx.session.coupleId
+          );
 
           if (!sharedCalendarId) {
             return {
@@ -168,7 +193,8 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
           if (!hasAuth) {
             return {
               success: false,
-              message: "You need to connect Google Calendar first. Use /auth google to connect.",
+              message:
+                "You need to connect Google Calendar first. Use /auth google to connect.",
               results: [],
             };
           }
@@ -201,12 +227,18 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
           } catch (error) {
             return {
               success: false,
-              message: error instanceof Error ? error.message : "Failed to create event",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to create event",
               results: [
                 {
                   user: "shared",
                   success: false,
-                  message: error instanceof Error ? error.message : "Failed to create event",
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to create event",
                 },
               ],
             };
@@ -232,7 +264,9 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
 
         for (const userId of userIds) {
           const isCurrentUser = userId === ctx.session.userId;
-          const userName = isCurrentUser ? "your" : `${ctx.session.partnerName ?? "partner"}'s`;
+          const userName = isCurrentUser
+            ? "your"
+            : `${ctx.session.partnerName ?? "partner"}'s`;
 
           const hasAuth = await hasGoogleAuth(userId);
           if (!hasAuth) {
@@ -263,7 +297,10 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
             results.push({
               user: userName,
               success: false,
-              message: error instanceof Error ? error.message : "Failed to create event",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to create event",
             });
           }
         }
@@ -274,7 +311,9 @@ export function createCalendarTools(ctx: ToolContext, partnerId: string | null) 
         return {
           success: allSuccess,
           message:
-            successCount > 0 ? `Created ${successCount} event(s)` : "Failed to create any events",
+            successCount > 0
+              ? `Created ${successCount} event(s)`
+              : "Failed to create any events",
           results,
         };
       },

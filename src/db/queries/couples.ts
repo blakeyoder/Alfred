@@ -24,7 +24,9 @@ export async function getCoupleById(id: string): Promise<Couple | null> {
   return rows[0] ?? null;
 }
 
-export async function getCoupleForUser(userId: string): Promise<Couple | null> {
+export async function getCoupleForUser(
+  userId: string
+): Promise<Couple | null> {
   const rows = await sql<Couple[]>`
     SELECT c.* FROM couples c
     JOIN couple_members cm ON cm.couple_id = c.id
@@ -33,7 +35,10 @@ export async function getCoupleForUser(userId: string): Promise<Couple | null> {
   return rows[0] ?? null;
 }
 
-export async function getPartner(coupleId: string, userId: string): Promise<User | null> {
+export async function getPartner(
+  coupleId: string,
+  userId: string
+): Promise<User | null> {
   const rows = await sql<User[]>`
     SELECT u.* FROM users u
     JOIN couple_members cm ON cm.user_id = u.id
@@ -87,7 +92,9 @@ export async function createCoupleWithMembers(
   });
 }
 
-export async function getSharedCalendarId(coupleId: string): Promise<string | null> {
+export async function getSharedCalendarId(
+  coupleId: string
+): Promise<string | null> {
   const rows = await sql<{ shared_calendar_id: string | null }[]>`
     SELECT shared_calendar_id FROM couples WHERE id = ${coupleId}
   `;
@@ -105,7 +112,9 @@ export async function setSharedCalendarId(
   `;
 }
 
-export async function getCoupleByGroupId(telegramGroupId: number): Promise<Couple | null> {
+export async function getCoupleByGroupId(
+  telegramGroupId: number
+): Promise<Couple | null> {
   const rows = await sql<Couple[]>`
     SELECT * FROM couples WHERE telegram_group_id = ${telegramGroupId}
   `;

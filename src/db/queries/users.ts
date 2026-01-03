@@ -22,7 +22,11 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   return rows[0] ?? null;
 }
 
-export async function createUser(email: string, name: string, googleId?: string): Promise<User> {
+export async function createUser(
+  email: string,
+  name: string,
+  googleId?: string
+): Promise<User> {
   const rows = await sql<User[]>`
     INSERT INTO users (email, name, google_id)
     VALUES (${email}, ${name}, ${googleId ?? null})
@@ -31,7 +35,10 @@ export async function createUser(email: string, name: string, googleId?: string)
   return rows[0];
 }
 
-export async function updateUserGoogleId(userId: string, googleId: string): Promise<void> {
+export async function updateUserGoogleId(
+  userId: string,
+  googleId: string
+): Promise<void> {
   await sql`
     UPDATE users SET google_id = ${googleId} WHERE id = ${userId}
   `;

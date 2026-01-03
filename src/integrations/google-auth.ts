@@ -34,7 +34,9 @@ function getClientCredentials() {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required");
+    throw new Error(
+      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required"
+    );
   }
 
   return { clientId, clientSecret };
@@ -82,7 +84,9 @@ export async function initiateDeviceFlow(): Promise<{
  * Polls for the authorization token after user completes the device flow.
  * Returns null if authorization is still pending, throws on error.
  */
-export async function pollForToken(deviceCode: string): Promise<TokenResponse | null> {
+export async function pollForToken(
+  deviceCode: string
+): Promise<TokenResponse | null> {
   const { clientId, clientSecret } = getClientCredentials();
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
@@ -105,7 +109,9 @@ export async function pollForToken(deviceCode: string): Promise<TokenResponse | 
     if (data.error === "slow_down") {
       return null; // Need to slow down polling
     }
-    throw new Error(`Token exchange failed: ${data.error_description || data.error}`);
+    throw new Error(
+      `Token exchange failed: ${data.error_description || data.error}`
+    );
   }
 
   return data as TokenResponse;
@@ -170,7 +176,9 @@ export async function getTokens(userId: string): Promise<StoredTokens | null> {
 /**
  * Refreshes an expired access token using the refresh token.
  */
-export async function refreshAccessToken(userId: string): Promise<string | null> {
+export async function refreshAccessToken(
+  userId: string
+): Promise<string | null> {
   const tokens = await getTokens(userId);
   if (!tokens) {
     return null;
@@ -217,7 +225,9 @@ export async function refreshAccessToken(userId: string): Promise<string | null>
  * Gets a valid access token, refreshing if necessary.
  * Returns null if no tokens exist or refresh fails.
  */
-export async function getValidAccessToken(userId: string): Promise<string | null> {
+export async function getValidAccessToken(
+  userId: string
+): Promise<string | null> {
   const tokens = await getTokens(userId);
   if (!tokens) {
     return null;
