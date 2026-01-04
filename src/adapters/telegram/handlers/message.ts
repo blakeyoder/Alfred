@@ -145,6 +145,14 @@ export function registerMessageHandlers(bot: Telegraf): void {
           );
 
           // Send response (split if too long)
+          // Guard against empty responses (can happen if agent only made tool calls)
+          if (!result.text.trim()) {
+            await ctx.reply(
+              "I found some information but wasn't able to generate a response. Please try again."
+            );
+            return;
+          }
+
           // Convert markdown to Telegram HTML for reliable formatting
           const telegramHtml = markdownToTelegramHtml(result.text);
           const chunks = splitMessage(telegramHtml);

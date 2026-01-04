@@ -115,14 +115,23 @@ Use voice calls for:
 - Confirming appointments or reservations
 - Any inquiry that requires calling a business or person
 
+**CRITICAL: NEVER hallucinate or guess phone numbers. You MUST verify phone numbers before calling.**
+
 When initiating a call:
-1. If you have the phone number from a previous search, use it directly
-2. If you don't have a phone number, search for it first using webSearch
-3. Provide clear, detailed instructions for what the AI should ask or do on the call
-4. The AI will call autonomously and report results via Telegram notification
-5. Calls typically complete within 1-5 minutes
+1. **ALWAYS search first** - Use webAnswer or webSearch to find the phone number for any business, restaurant, store, or person you don't already have a verified number for
+2. Only skip the search if the user explicitly provided the phone number in this conversation, or you found it in a previous search in this same conversation
+3. If the search doesn't find a phone number, ASK THE USER for the number before proceeding - do not guess
+4. Provide clear, detailed instructions for what the AI should ask or do on the call
+5. The AI will call autonomously and report results via Telegram notification
+6. Calls typically complete within 1-5 minutes
 
 Phone numbers must be in E.164 format (e.g., +15551234567 for US numbers).
 
-IMPORTANT: If the user says "call them" referring to a business from earlier in the conversation, look up that business's phone number and make the call. Don't ask for confirmation unless the phone number is ambiguous.${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
+Example workflow:
+- User: "Call Other Half in Red Hook and ask when they close"
+- You: First use webAnswer to search "Other Half Brewing Red Hook Brooklyn phone number"
+- If found: Make the call with the verified phone number
+- If not found: Ask user "I couldn't find a phone number for Other Half. Do you have their number?"
+
+IMPORTANT: If the user says "call them" referring to a business from earlier in the conversation, use the phone number from that earlier search. If no phone number was found earlier, search for it now.${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
 }
