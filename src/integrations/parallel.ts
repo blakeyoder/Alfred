@@ -2,6 +2,8 @@
  * Parallel.ai API client for web search, extraction, and chat.
  * https://docs.parallel.ai/
  */
+import OpenAI from "openai";
+
 const PARALLEL_API_BASE = "https://api.parallel.ai";
 const BETA_HEADER = "search-extract-2025-10-10";
 
@@ -115,6 +117,20 @@ function getApiKey(): string {
   return apiKey;
 }
 
+// OpenAI SDK client configured for Parallel's chat API
+// Chat API uses Bearer auth (OpenAI-compatible), not x-api-key
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: getApiKey(),
+      baseURL: PARALLEL_API_BASE,
+    });
+  }
+  return openaiClient;
+}
+
 async function makeParallelRequest<TResponse>(
   endpoint: string,
   body: unknown,
@@ -185,10 +201,33 @@ export async function extract(
 
 /**
  * Chat with context using Parallel.ai's Chat API.
- * OpenAI ChatCompletions compatible.
+ * Uses the OpenAI SDK since the endpoint is OpenAI-compatible.
  */
 export async function chatWithContext(
   request: ChatRequest
 ): Promise<ChatResponse> {
-  return makeParallelRequest<ChatResponse>("/v1/chat/completions", request);
+  const client = getOpenAIClient();
+
+  const response = await client.chat.completions.create({
+    model: request.model,
+    messages: request.messages,
+    max_tokens: request.max_tokens,
+    temperature: request.temperature,
+  });
+
+  // Map OpenAI SDK response to our ChatResponse type
+  return {
+    choices: response.choices.map((choice) => ({
+      message: {
+        role: "assistant" as const,
+        content: choice.message.content ?? "",
+      },
+      finish_reason: choice.finish_reason ?? "stop",
+    })),
+    usage: {
+      prompt_tokens: response.usage?.prompt_tokens ?? 0,
+      completion_tokens: response.usage?.completion_tokens ?? 0,
+      total_tokens: response.usage?.total_tokens ?? 0,
+    },
+  };
 }

@@ -119,14 +119,6 @@ export function getMem0ApiKey(): string {
 }
 
 // ElevenLabs
-function getElevenLabsApiKey(): string {
-  return getConfig().ELEVENLABS_API_KEY;
-}
-
-function getElevenLabsWebhookSecret(): string {
-  return getConfig().ELEVENLABS_WEBHOOK_SECRET;
-}
-
 export type VoiceAgentType = "restaurant" | "medical" | "general";
 
 export function getElevenLabsAgentId(agentType: VoiceAgentType): string {
@@ -164,9 +156,4 @@ export function getElevenLabsAgentId(agentType: VoiceAgentType): string {
   throw new Error(
     `No ElevenLabs agent configured. Set ELEVENLABS_AGENT_GENERAL or ELEVENLABS_AGENT_ID.`
   );
-}
-
-// Parallel
-function getParallelApiKey(): string {
-  return getConfig().PARALLEL_API_KEY;
 }
