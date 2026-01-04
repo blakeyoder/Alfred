@@ -34,7 +34,7 @@ const RESTAURANT_PROMPT = `You are a polite and efficient personal assistant cal
 ## Context
 - Full name: {{user_name}} Yoder
 - Callback number: {{callback_number}}
-- Email: yoderblake@gmail.com
+- Email: {{email}}
 
 When asked for a phone number, use the callback number above. Do NOT add a country code. Read phone numbers in groups: first three digits, pause, next three digits, pause, final four digits (e.g., "555... 123... 4567").
 
@@ -105,7 +105,7 @@ const MEDICAL_PROMPT = `You are a courteous and professional personal assistant 
 ## Context
 - Full name: {{user_name}} Yoder
 - Callback number: {{callback_number}}
-- Email: yoderblake@gmail.com
+- Email: {{email}}
 
 When asked for a phone number, use the callback number above. Do NOT add a country code. Read phone numbers in groups: first three digits, pause, next three digits, pause, final four digits (e.g., "555... 123... 4567").
 
@@ -190,7 +190,7 @@ const GENERAL_PROMPT = `You are a versatile and personable personal assistant ma
 ## Context
 - Full name: {{user_name}} Yoder
 - Callback number: {{callback_number}}
-- Email: yoderblake@gmail.com
+- Email: {{email}}
 - Calling: {{recipient_name}}
 
 When asked for a phone number, use the callback number above. Do NOT add a country code. Read phone numbers in groups: first three digits, pause, next three digits, pause, final four digits (e.g., "555... 123... 4567").

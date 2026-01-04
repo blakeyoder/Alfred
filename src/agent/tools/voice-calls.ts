@@ -102,6 +102,7 @@ export function createVoiceCallTools(
           console.log(`[voice-call] User: ${user?.name ?? "unknown"}`);
           const userName = user?.name ?? "your assistant";
           const callbackNumber = user?.phone_number ?? null;
+          const userEmail = user?.email ?? null;
 
           // Create database record first (pending status)
           console.log(`[voice-call] Creating database record...`);
@@ -118,6 +119,7 @@ export function createVoiceCallTools(
                 user_name: userName,
                 call_instructions: instructions,
                 ...(callbackNumber && { callback_number: callbackNumber }),
+                ...(userEmail && { email: userEmail }),
                 ...dynamicVariables,
               },
             }
@@ -142,6 +144,7 @@ export function createVoiceCallTools(
                   agent_type: agentType,
                   call_purpose: callPurpose,
                   ...(callbackNumber && { callback_number: callbackNumber }),
+                  ...(userEmail && { email: userEmail }),
                   ...dynamicVariables,
                 },
               },
