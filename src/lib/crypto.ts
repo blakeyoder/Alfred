@@ -1,26 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { getEncryptionKey } from "./config.js";
 
 const ALGORITHM = "aes-256-gcm";
-const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
-
-function getEncryptionKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY;
-  if (!key) {
-    throw new Error("ENCRYPTION_KEY environment variable is required");
-  }
-
-  const keyBuffer = Buffer.from(key, "hex");
-  if (keyBuffer.length !== KEY_LENGTH) {
-    throw new Error(
-      `ENCRYPTION_KEY must be ${KEY_LENGTH} bytes (${KEY_LENGTH * 2} hex chars). ` +
-        `Generate with: openssl rand -hex 32`
-    );
-  }
-
-  return keyBuffer;
-}
 
 /**
  * Encrypts plaintext using AES-256-GCM.

@@ -12,13 +12,9 @@ import {
   startReminderNotifications,
   stopReminderNotifications,
 } from "../../services/reminder-notifications.js";
+import { getTelegramBotToken } from "../../lib/config.js";
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
-if (!token) {
-  throw new Error("TELEGRAM_BOT_TOKEN is required");
-}
-
-const bot = createBot(token);
+const bot = createBot(getTelegramBotToken());
 
 // Graceful shutdown
 async function shutdown(signal: string) {

@@ -2,54 +2,20 @@
  * ElevenLabs Conversational AI API client
  * https://elevenlabs.io/docs/api-reference
  */
+import {
+  getElevenLabsAgentId as getAgentIdFromConfig,
+  type VoiceAgentType,
+} from "../lib/config.js";
 
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io";
 
-// ============ Voice Agent Types ============
-
-/**
- * Specialized voice agent types for different call scenarios.
- * Each type maps to a dedicated ElevenLabs agent with optimized prompts.
- */
-export type VoiceAgentType = "restaurant" | "medical" | "general";
-
+// Re-export the type for consumers
 /**
  * Get the ElevenLabs agent ID for a specific voice agent type.
  * Falls back to general agent if the specific type is not configured.
  */
 export function getVoiceAgentId(agentType: VoiceAgentType): string {
-  const agentIds: Record<VoiceAgentType, string | undefined> = {
-    restaurant: process.env.ELEVENLABS_AGENT_RESTAURANT,
-    medical: process.env.ELEVENLABS_AGENT_MEDICAL,
-    general: process.env.ELEVENLABS_AGENT_GENERAL,
-  };
-
-  // Try the specific agent first, fall back to general
-  const specificAgent = agentIds[agentType];
-  if (specificAgent) {
-    return specificAgent;
-  }
-
-  const generalAgent = agentIds.general;
-  if (generalAgent) {
-    console.log(
-      `[elevenlabs] No agent configured for type "${agentType}", using general agent`
-    );
-    return generalAgent;
-  }
-
-  // Legacy fallback to old single agent ID
-  const legacyAgent = process.env.ELEVENLABS_AGENT_ID;
-  if (legacyAgent) {
-    console.log(
-      `[elevenlabs] No typed agents configured, using legacy ELEVENLABS_AGENT_ID`
-    );
-    return legacyAgent;
-  }
-
-  throw new Error(
-    `No ElevenLabs agent configured. Set ELEVENLABS_AGENT_GENERAL or ELEVENLABS_AGENT_ID.`
-  );
+  return getAgentIdFromConfig(agentType);
 }
 
 // ============ Types ============
@@ -71,20 +37,20 @@ export interface OutboundCallResponse {
   callSid: string | null;
 }
 
-export type ConversationStatus =
+type ConversationStatus =
   | "initiated"
   | "in-progress"
   | "processing"
   | "done"
   | "failed";
 
-export interface TranscriptEntry {
+interface TranscriptEntry {
   role: "user" | "agent";
   message: string | null;
   time_in_call_secs: number;
 }
 
-export interface ConversationMetadata {
+interface ConversationMetadata {
   start_time_unix_secs: number;
   call_duration_secs: number;
   termination_reason?: string;
@@ -97,7 +63,7 @@ export interface ConversationMetadata {
   };
 }
 
-export interface ConversationAnalysis {
+interface ConversationAnalysis {
   call_successful: "success" | "failure" | "unknown";
   transcript_summary: string;
   call_summary_title?: string;

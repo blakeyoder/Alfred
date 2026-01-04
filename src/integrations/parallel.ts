@@ -2,18 +2,17 @@
  * Parallel.ai API client for web search, extraction, and chat.
  * https://docs.parallel.ai/
  */
-
 const PARALLEL_API_BASE = "https://api.parallel.ai";
 const BETA_HEADER = "search-extract-2025-10-10";
 
 // ============ Search API Types ============
 
-export interface SearchExcerptConfig {
+interface SearchExcerptConfig {
   max_chars_per_result?: number;
   max_chars_total?: number;
 }
 
-export interface SearchSourcePolicy {
+interface SearchSourcePolicy {
   include_domains?: string[];
   exclude_domains?: string[];
   after_date?: string; // RFC 3339 format
@@ -77,7 +76,7 @@ export interface ExtractResponse {
 
 // ============ Chat API Types ============
 
-export interface ChatMessage {
+interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
@@ -89,7 +88,7 @@ export interface ChatRequest {
   temperature?: number;
 }
 
-export interface ChatChoice {
+interface ChatChoice {
   message: {
     role: "assistant";
     content: string;

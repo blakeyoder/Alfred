@@ -40,18 +40,12 @@ const webExtractSchema = z.object({
     ),
 });
 
-const webChatSchema = z.object({
+const webAnswerSchema = z.object({
   question: z
     .string()
     .describe(
-      "Follow-up question about previous search results. " +
-        "Use when the user wants more details about something already found."
-    ),
-  context: z
-    .string()
-    .describe(
-      "Relevant context from previous search results (URLs, excerpts, etc.) " +
-        "to help answer the question accurately."
+      "The factual question to answer. Be specific and include relevant details " +
+        "(e.g., 'What is the phone number for 4 Charles Prime Rib in NYC?')"
     ),
 });
 
@@ -142,8 +136,10 @@ export function createWebSearchTools(
   return {
     webSearch: tool({
       description:
-        "Search the web for information like restaurants, products, news, services, etc. " +
-        "Use for discovery queries. Returns URLs and excerpts. " +
+        "Search the web for discovery and recommendation queries. " +
+        "Use when exploring options (e.g., 'best Italian restaurants in Brooklyn', 'wine bars near me'). " +
+        "Returns multiple URLs and excerpts for comparison. " +
+        "For simple factual queries (phone numbers, hours, addresses), use webAnswer instead. " +
         "If the query is location-specific and no location is provided, ask the user.",
       inputSchema: webSearchSchema,
       execute: async ({ query, location, maxResults = 5 }) => {
@@ -202,8 +198,9 @@ export function createWebSearchTools(
 
     webExtract: tool({
       description:
-        "Get detailed content from a specific URL. Use after webSearch to get more " +
-        "information about a specific result (menu, hours, reviews, full article, etc.).",
+        "Extract detailed content from a specific URL. Use after webSearch to get full details " +
+        "about a specific result (complete menu, detailed reviews, full article text). " +
+        "Not needed for simple facts - use webAnswer for those.",
       inputSchema: webExtractSchema,
       execute: async ({ url, focus }) => {
         try {
@@ -231,37 +228,32 @@ export function createWebSearchTools(
       },
     }),
 
-    webChat: tool({
+    webAnswer: tool({
       description:
-        "Ask a follow-up question about previous search results. " +
-        "Use when the user wants clarification or additional details " +
-        "about something already found via webSearch or webExtract. " +
-        "Requires providing context from the previous results.",
-      inputSchema: webChatSchema,
-      execute: async ({ question, context }) => {
+        "Get a direct answer to a factual question using real-time web search. " +
+        "Best for specific factual queries like phone numbers, addresses, hours, prices, " +
+        "current events, or any question with a definitive answer. " +
+        "Returns the answer with citations. Prefer this over webSearch for simple factual lookups.",
+      inputSchema: webAnswerSchema,
+      execute: async ({ question }) => {
         try {
           const response = await chatWithContext({
-            model: "parallel-small",
+            model: "speed",
             messages: [
               {
-                role: "system",
-                content:
-                  "You are a helpful assistant answering questions based on web search results. " +
-                  "Be concise and accurate. If the context does not contain the answer, say so.",
-              },
-              {
                 role: "user",
-                content: `Context from previous search:\n${context}\n\nQuestion: ${question}`,
+                content: question,
               },
             ],
             max_tokens: 500,
-            temperature: 0.3,
+            temperature: 0.1,
           });
 
           const answer = response.choices[0]?.message?.content ?? "";
 
           return {
             success: true,
+            question,
             answer,
             tokensUsed: response.usage.total_tokens,
           };
@@ -271,7 +263,7 @@ export function createWebSearchTools(
             message:
               error instanceof Error
                 ? error.message
-                : "Failed to process follow-up question",
+                : "Failed to answer question",
           };
         }
       },

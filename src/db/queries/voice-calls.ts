@@ -144,25 +144,6 @@ export async function markCallNotified(id: string): Promise<void> {
   `;
 }
 
-export async function getVoiceCallById(id: string): Promise<VoiceCall | null> {
-  const rows = await sql<VoiceCall[]>`
-    SELECT * FROM voice_calls WHERE id = ${id}
-  `;
-  return rows[0] ?? null;
-}
-
-export async function getVoiceCallsForCouple(
-  coupleId: string,
-  limit = 10
-): Promise<VoiceCall[]> {
-  return sql<VoiceCall[]>`
-    SELECT * FROM voice_calls
-    WHERE couple_id = ${coupleId}
-    ORDER BY created_at DESC
-    LIMIT ${limit}
-  `;
-}
-
 /**
  * Mark a call as failed (for API errors before call starts)
  */

@@ -1,5 +1,6 @@
 import { sql } from "../db/client.js";
 import { encrypt, decrypt } from "../lib/crypto.js";
+import { getGoogleCredentials } from "../lib/config.js";
 
 const GOOGLE_DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -29,19 +30,6 @@ interface StoredTokens {
   scopes: string[];
 }
 
-function getClientCredentials() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error(
-      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required"
-    );
-  }
-
-  return { clientId, clientSecret };
-}
-
 /**
  * Initiates the Device Authorization flow.
  * Returns the user code and verification URL for the user to complete auth.
@@ -53,7 +41,7 @@ export async function initiateDeviceFlow(): Promise<{
   expiresIn: number;
   interval: number;
 }> {
-  const { clientId } = getClientCredentials();
+  const { clientId } = getGoogleCredentials();
 
   const response = await fetch(GOOGLE_DEVICE_CODE_URL, {
     method: "POST",
@@ -85,7 +73,7 @@ export async function initiateDeviceFlow(): Promise<{
  * Returns null if authorization is still pending, throws on error.
  */
 async function pollForToken(deviceCode: string): Promise<TokenResponse | null> {
-  const { clientId, clientSecret } = getClientCredentials();
+  const { clientId, clientSecret } = getGoogleCredentials();
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
@@ -180,7 +168,7 @@ async function refreshAccessToken(userId: string): Promise<string | null> {
     return null;
   }
 
-  const { clientId, clientSecret } = getClientCredentials();
+  const { clientId, clientSecret } = getGoogleCredentials();
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",

@@ -1,14 +1,5 @@
 import { addMemories, searchMemories } from "@mem0/vercel-ai-provider";
-
-// Validate required environment variables
-function validateEnv() {
-  if (!process.env.MEM0_API_KEY) {
-    throw new Error("MEM0_API_KEY environment variable is required");
-  }
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY environment variable is required");
-  }
-}
+import { getMem0ApiKey } from "../lib/config.js";
 
 // Declarative memory extraction rules for mem0
 // These tell mem0's LLM what to extract vs ignore
@@ -28,6 +19,7 @@ const MEMORY_EXCLUDES = [
   "greetings and acknowledgments",
   "search requests",
   "temporary scheduling details",
+  "current location or whereabouts (ephemeral, changes frequently)",
 ].join(", ");
 
 const CUSTOM_INSTRUCTIONS = `
@@ -36,6 +28,7 @@ information that would be useful across multiple conversations. Do NOT store:
 - One-time requests like "book a table" or "set a reminder"
 - Ephemeral scheduling details
 - Questions or queries
+- Current location or whereabouts (these change frequently and should not be persisted)
 Focus on facts about the people, their preferences, relationships, and life context.
 `.trim();
 
@@ -48,7 +41,7 @@ export async function storeMemories(
   coupleId: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
-  validateEnv();
+  const mem0ApiKey = getMem0ApiKey();
   const prompt = messages.map((m) => ({
     role: m.role,
     content: [{ type: "text" as const, text: m.content }],
@@ -59,7 +52,7 @@ export async function storeMemories(
   await addMemories(prompt, {
     user_id: coupleId,
     metadata,
-    mem0ApiKey: process.env.MEM0_API_KEY,
+    mem0ApiKey,
     includes: MEMORY_INCLUDES,
     excludes: MEMORY_EXCLUDES,
     custom_instructions: CUSTOM_INSTRUCTIONS,
@@ -81,11 +74,11 @@ export async function searchMemoriesForCouple(
     metadata?: Record<string, unknown>;
   }>
 > {
-  validateEnv();
+  const mem0ApiKey = getMem0ApiKey();
   const result = await searchMemories(query, {
     user_id: coupleId,
     top_k: limit,
-    mem0ApiKey: process.env.MEM0_API_KEY,
+    mem0ApiKey,
   });
 
   // Handle different response formats from mem0
