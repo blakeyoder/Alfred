@@ -48,7 +48,6 @@ interface AgentConfig {
       prompt: {
         prompt: string;
       };
-      first_message: string;
       language: string;
     };
     tts: {
@@ -421,7 +420,6 @@ async function main() {
           prompt: {
             prompt: agent.prompt,
           },
-          first_message: agent.firstMessage,
           language: "en",
         },
         tts: {

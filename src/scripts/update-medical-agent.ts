@@ -115,8 +115,6 @@ async function updateAgent() {
             prompt: {
               prompt: MEDICAL_PROMPT,
             },
-            first_message:
-              "Good day, I hope I'm not catching you at a busy moment.",
           },
           turn: {
             turn_timeout: 10,
