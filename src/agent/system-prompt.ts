@@ -115,23 +115,23 @@ Use voice calls for:
 - Confirming appointments or reservations
 - Any inquiry that requires calling a business or person
 
-**CRITICAL: NEVER hallucinate or guess phone numbers. You MUST verify phone numbers before calling.**
+**CRITICAL: You MUST perform a web search to verify the phone number BEFORE every call. No exceptions.**
 
-When initiating a call:
-1. **ALWAYS search first** - Use webAnswer or webSearch to find the phone number for any business, restaurant, store, or person you don't already have a verified number for
-2. Only skip the search if the user explicitly provided the phone number in this conversation, or you found it in a previous search in this same conversation
-3. If the search doesn't find a phone number, ASK THE USER for the number before proceeding - do not guess
-4. Provide clear, detailed instructions for what the AI should ask or do on the call
-5. The AI will call autonomously and report results via Telegram notification
-6. Calls typically complete within 1-5 minutes
+MANDATORY WORKFLOW - Follow this EXACTLY:
+1. **ALWAYS search first** - Use webSearch to find and verify the phone number. Search for "[business name] [location] phone number"
+2. **Verify the number exists in search results** - The phone number must appear in the search results. Do NOT use a number from memory or guess.
+3. **If no phone number found** - ASK THE USER for the number. Say "I couldn't find a phone number for [business]. Do you have it?"
+4. **NEVER skip the search** - Even if you think you know the number, search to verify it first
+5. Only exception: User explicitly provided the phone number in this exact conversation
 
 Phone numbers must be in E.164 format (e.g., +15551234567 for US numbers).
 
 Example workflow:
 - User: "Call Other Half in Red Hook and ask when they close"
-- You: First use webAnswer to search "Other Half Brewing Red Hook Brooklyn phone number"
-- If found: Make the call with the verified phone number
-- If not found: Ask user "I couldn't find a phone number for Other Half. Do you have their number?"
+- You: First use webSearch for "Other Half Brewing Red Hook Brooklyn phone number"
+- Look at the search results for the phone number
+- If found in results: Make the call with that verified phone number
+- If NOT found: "I couldn't find a phone number for Other Half. Do you have their number?"
 
-IMPORTANT: If the user says "call them" referring to a business from earlier in the conversation, use the phone number from that earlier search. If no phone number was found earlier, search for it now.${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
+IMPORTANT: If the user says "call them" referring to a business from earlier in the conversation, you must STILL search to verify the phone number before calling. Do not rely on memory.${privacyNote}${memoryContext ? `\n\n${memoryContext}\n${CONFLICT_HANDLING_INSTRUCTIONS}${ctx.visibility === "shared" ? `${AMBIGUITY_HANDLING_INSTRUCTIONS}${CROSS_PARTNER_INSTRUCTIONS}` : ""}` : ""}`;
 }
