@@ -354,7 +354,7 @@ async function main() {
       turn: {
         turnTimeout: 12, // Seconds to wait for response
         silenceEndCallTimeout: 15, // End call after 15s silence (saves credits)
-        turnEagerness: "eager", // Snappier responses
+        turnEagerness: "normal", // Natural pacing, waits for conversation breaks
       },
       conversation: {
         maxDurationSeconds: 180, // 3 minute hard cap
