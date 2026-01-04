@@ -21,6 +21,7 @@ import {
   shouldRetrieveMemories,
   type Mem0Memory,
 } from "./memory-privacy.js";
+import { getOpenAIModel } from "../lib/config.js";
 
 export interface ChatOptions {
   context: SessionContext;
@@ -74,7 +75,7 @@ export async function chat(
       `[agent] Calling generateText with message: "${message.slice(0, 100)}..."`
     );
     const result = await generateText({
-      model: openai("gpt-4o"),
+      model: openai(getOpenAIModel()),
       system: buildSystemPrompt({ context, memoryContext }),
       messages: [...history, { role: "user", content: message }],
       tools,

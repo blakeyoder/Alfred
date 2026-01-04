@@ -20,6 +20,7 @@ const EnvSchema = z.object({
 
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
 
   // Google OAuth
   GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
@@ -94,6 +95,11 @@ export function getDatabaseUrl(): string {
 // Encryption
 export function getEncryptionKey(): Buffer {
   return Buffer.from(getConfig().ENCRYPTION_KEY, "hex");
+}
+
+// OpenAI
+export function getOpenAIModel(): string {
+  return getConfig().OPENAI_MODEL;
 }
 
 // Google OAuth

@@ -66,7 +66,7 @@ interface AgentConfig {
 
 // ============ Agent Prompts ============
 
-const RESTAURANT_PROMPT = `You are Alfred, a polite and efficient British personal assistant making a restaurant reservation on behalf of {{user_name}}.
+const RESTAURANT_PROMPT = `You are Alfred, a polite and efficient British personal assistant calling restaurants on behalf of {{user_name}}.
 
 ## Personality
 - Warm but professional, with understated British charm
@@ -79,47 +79,29 @@ const RESTAURANT_PROMPT = `You are Alfred, a polite and efficient British person
 
 Calling: {{recipient_name}}
 
-## Conversation Flow
-
-**Opening** (adapt to context):
-- "Good [time of day], I'm hoping to book a table, please."
-- "Hello there, I'm calling to make a reservation if you have availability."
-
-**Gathering/Providing Details:**
-When the host asks, provide:
-- Party size
-- Preferred date and time
-- Name for the reservation: {{user_name}}
-- Any special requests from instructions (dietary needs, occasion, seating preference)
-
-**Negotiating Alternatives:**
-If your preferred time isn't available:
-- "Ah, that's a shame. What do you have around that time?"
-- "Would [alternative] work? Let me see... yes, that should be fine."
-- If nothing works: "I see. I'll check with {{user_name}} and ring back. Thank you for your help."
-
-**Confirming:**
-Always repeat back: "Lovely, so that's [party size] at [time] on [date], under the name {{user_name}}. Perfect."
-
-**Closing:**
-- "Wonderful, thank you so much for your help."
-- "Brilliant, we look forward to it. Goodbye."
+## Guidelines
+- Open with a warm greeting and state your purpose based on the task above
+- Listen actively and respond naturally to questions
+- If the task involves a reservation, confirm: date, time, party size, name for the reservation ({{user_name}})
+- If the task is a simple inquiry (hours, location, menu questions), get the information and thank them
+- Be flexible—if they offer alternatives or additional info, consider it
+- Keep responses concise—1-2 sentences at a time
+- Mirror the host's energy (chatty if they're chatty, efficient if they're busy)
+- If asked something outside your instructions, say: "I'd need to check with {{user_name}} on that."
+- Never invent details not in your instructions
 
 ## If Asked Who You Are
-"I'm Alfred, an AI assistant calling on behalf of {{user_name}}."
+"I'm Alfred, a personal assistant calling on behalf of {{user_name}}."
 Be matter-of-fact about it—don't over-explain or apologize.
 
 ## Voicemail Detection
 If you hear a voicemail greeting or beep:
-1. Leave a brief message: "Hello, this is Alfred calling on behalf of {{user_name}} regarding a reservation enquiry. We'd be grateful if you could return the call on {{callback_number}}. Many thanks."
-2. IMMEDIATELY hang up after leaving your message. Do not wait for a response.
-3. Do NOT ask "are you still there" - you are talking to a recording.
+1. Leave a brief message stating your purpose: "Hello, this is Alfred calling on behalf of {{user_name}}. [State purpose briefly]. I'll try again later."
+2. If they ask for a callback number, provide {{callback_number}}.
+3. IMMEDIATELY hang up after leaving your message. Do not wait for a response.
+4. Do NOT ask "are you still there"—you are talking to a recording.
 
-## Guidelines
-- Keep responses concise—1-2 sentences at a time
-- Mirror the host's energy (chatty if they're chatty, efficient if they're busy)
-- If asked something outside your instructions, say: "I'd need to check with {{user_name}} on that."
-- Never invent details not in your instructions`;
+Remember: Match your approach to the task. A quick question deserves a quick call; a reservation deserves careful confirmation.`;
 
 const MEDICAL_PROMPT = `You are Alfred, a courteous and professional British personal assistant calling a medical office on behalf of {{user_name}}.
 
@@ -172,7 +154,7 @@ Summarize what you learned: "Just to confirm, [repeat key information back]."
 "Thank you very much for your help. Goodbye."
 
 ## If Asked Who You Are
-"I'm Alfred, an AI assistant calling on behalf of {{user_name}}."
+"I'm Alfred, a personal assistant calling on behalf of {{user_name}}."
 
 ## If Asked for Information You Don't Have
 "I don't have that information to hand. {{user_name}} will need to provide that directly—shall I have them call back?"
@@ -225,7 +207,7 @@ Summarise any agreements or next steps: "So just to confirm, [summary]. Is that 
 - "Lovely, thanks again. Take care."
 
 ## If Asked Who You Are
-"I'm Alfred, an AI assistant calling on behalf of {{user_name}}."
+"I'm Alfred, a personal assistant calling on behalf of {{user_name}}."
 Be matter-of-fact—don't over-explain.
 
 ## For Personal Calls
@@ -309,6 +291,27 @@ async function createAgent(config: AgentConfig): Promise<string> {
   return data.agent_id;
 }
 
+async function updateAgent(agentId: string, config: AgentConfig): Promise<void> {
+  const apiKey = getApiKey();
+
+  const response = await fetch(
+    `${ELEVENLABS_API_BASE}/v1/convai/agents/${agentId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(config),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to update agent "${config.name}": ${error}`);
+  }
+}
+
 function findBritishVoice(voices: Voice[]): Voice | null {
   // Priority order for finding British voices
   const britishKeywords = ["british", "uk", "england", "english"];
@@ -379,40 +382,53 @@ async function main() {
   );
 
   // Step 2: Create agents
-  console.log("\n2. Creating voice agents...\n");
+  // Check for existing agent IDs in environment
+  const existingAgents = {
+    restaurant: process.env.ELEVENLABS_AGENT_RESTAURANT,
+    medical: process.env.ELEVENLABS_AGENT_MEDICAL,
+    general: process.env.ELEVENLABS_AGENT_GENERAL,
+  };
+
+  const hasExistingAgents = Object.values(existingAgents).some(Boolean);
+  const mode = hasExistingAgents ? "update" : "create";
+
+  console.log(
+    `\n2. ${mode === "update" ? "Updating" : "Creating"} voice agents...\n`
+  );
 
   const agents: {
     name: string;
     envVar: string;
+    existingId: string | undefined;
     prompt: string;
     firstMessage: string;
   }[] = [
     {
       name: "alfred-restaurant",
       envVar: "ELEVENLABS_AGENT_RESTAURANT",
+      existingId: existingAgents.restaurant,
       prompt: RESTAURANT_PROMPT,
-      firstMessage:
-        "Good day, I'm calling to enquire about making a reservation, please.",
+      firstMessage: "",
     },
     {
       name: "alfred-medical",
       envVar: "ELEVENLABS_AGENT_MEDICAL",
+      existingId: existingAgents.medical,
       prompt: MEDICAL_PROMPT,
-      firstMessage: "Good day, I hope I'm not catching you at a busy moment.",
+      firstMessage: "",
     },
     {
       name: "alfred-general",
       envVar: "ELEVENLABS_AGENT_GENERAL",
+      existingId: existingAgents.general,
       prompt: GENERAL_PROMPT,
-      firstMessage: "Good day, I hope I haven't caught you at a bad time.",
+      firstMessage: "",
     },
   ];
 
-  const createdAgents: { name: string; envVar: string; agentId: string }[] = [];
+  const results: { name: string; envVar: string; agentId: string; action: string }[] = [];
 
   for (const agent of agents) {
-    console.log(`   Creating ${agent.name}...`);
-
     const config: AgentConfig = {
       name: agent.name,
       conversation_config: {
@@ -431,41 +447,71 @@ async function main() {
         // Turn settings for natural conversation
         turn: {
           turn_timeout: 10, // Seconds to wait for response
-          silence_end_call_timeout: 15, // End call after 15s silence (helps with voicemail)
+          silence_end_call_timeout: 30, // End call after 30s silence (helps with voicemail)
           turn_eagerness: "eager", // Snappier responses
         },
       },
     };
 
     try {
-      const agentId = await createAgent(config);
-      createdAgents.push({ name: agent.name, envVar: agent.envVar, agentId });
-      console.log(`   ✓ Created: ${agent.name} (${agentId})`);
+      if (agent.existingId) {
+        // Update existing agent
+        console.log(`   Updating ${agent.name}...`);
+        await updateAgent(agent.existingId, config);
+        results.push({
+          name: agent.name,
+          envVar: agent.envVar,
+          agentId: agent.existingId,
+          action: "updated",
+        });
+        console.log(`   ✓ Updated: ${agent.name} (${agent.existingId})`);
+      } else {
+        // Create new agent
+        console.log(`   Creating ${agent.name}...`);
+        const agentId = await createAgent(config);
+        results.push({
+          name: agent.name,
+          envVar: agent.envVar,
+          agentId,
+          action: "created",
+        });
+        console.log(`   ✓ Created: ${agent.name} (${agentId})`);
+      }
     } catch (error) {
-      console.error(`   ✗ Failed to create ${agent.name}:`, error);
+      console.error(`   ✗ Failed to ${agent.existingId ? "update" : "create"} ${agent.name}:`, error);
       throw error;
     }
   }
 
-  // Step 3: Output environment variables
+  // Step 3: Output results
   console.log("\n" + "=".repeat(50));
-  console.log("\n3. Add these to your .env file:\n");
 
-  for (const agent of createdAgents) {
-    console.log(`${agent.envVar}=${agent.agentId}`);
+  const newAgents = results.filter((r) => r.action === "created");
+  if (newAgents.length > 0) {
+    console.log("\n3. Add these to your .env file:\n");
+    for (const agent of newAgents) {
+      console.log(`${agent.envVar}=${agent.agentId}`);
+    }
+  } else {
+    console.log("\n3. All agents updated in place. No .env changes needed.");
   }
 
   console.log("\n" + "=".repeat(50));
   console.log("\nSetup complete!");
-  console.log("\nNext steps:");
-  console.log("1. Copy the environment variables above to your .env file");
-  console.log(
-    "2. Configure webhooks for each agent in the ElevenLabs dashboard:"
-  );
-  console.log("   - URL: https://your-app-url.com/webhook/elevenlabs");
-  console.log("   - Type: post_call_transcription");
-  console.log("3. Run: bun run migrate");
-  console.log("4. Restart your Alfred instance");
+
+  if (newAgents.length > 0) {
+    console.log("\nNext steps:");
+    console.log("1. Copy the environment variables above to your .env file");
+    console.log(
+      "2. Configure webhooks for each agent in the ElevenLabs dashboard:"
+    );
+    console.log("   - URL: https://your-app-url.com/webhook/elevenlabs");
+    console.log("   - Type: post_call_transcription");
+    console.log("3. Run: bun run migrate");
+    console.log("4. Restart your Alfred instance");
+  } else {
+    console.log("\nAll agents synced with local configuration.");
+  }
 }
 
 main().catch((error) => {
