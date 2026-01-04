@@ -7,6 +7,7 @@ import {
   APICallError,
 } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { trace, SpanStatusCode } from "@opentelemetry/api";
 import { buildSystemPrompt, type SessionContext } from "./system-prompt.js";
 import { createTools } from "./tools/index.js";
 import {
@@ -84,6 +85,21 @@ export async function chat(
         openai: {
           user: context.userId,
           parallelToolCalls: true,
+        },
+      },
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "alfred-chat",
+        tracer: trace.getTracer("alfred-chat"),
+        recordInputs: true,
+        recordOutputs: true,
+        metadata: {
+          userId: context.userId,
+          sessionId: context.threadId,
+          coupleId: context.coupleId,
+          visibility: context.visibility,
+          userName: context.userName,
+          ...(context.partnerName && { partnerName: context.partnerName }),
         },
       },
       onStepFinish: async ({ toolCalls, toolResults }) => {
@@ -164,6 +180,14 @@ export async function chat(
     };
   } catch (error) {
     console.error(`[agent] Error in generateText:`, error);
+
+    // Record error in active span for tracing
+    const span = trace.getActiveSpan();
+    if (span && error instanceof Error) {
+      span.recordException(error);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+    }
+
     if (NoSuchToolError.isInstance(error)) {
       throw new Error(`AI tried to use an unknown tool: ${error.toolName}`);
     }

@@ -6,6 +6,13 @@
  * Usage: npm run telegram
  */
 import "dotenv/config";
+import {
+  initializeTracing,
+  shutdownTracing,
+} from "../../lib/instrumentation.js";
+
+// Initialize tracing before any other imports that might create spans
+initializeTracing();
 import { createBot } from "./bot.js";
 import { closeConnection } from "../../db/client.js";
 import {
@@ -21,6 +28,7 @@ async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down...`);
   stopReminderNotifications();
   bot.stop(signal);
+  await shutdownTracing();
   await closeConnection();
   process.exit(0);
 }

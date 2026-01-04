@@ -7,6 +7,13 @@
  * Required env vars: TELEGRAM_BOT_TOKEN, APP_URL
  */
 import "dotenv/config";
+import {
+  initializeTracing,
+  shutdownTracing,
+} from "../../lib/instrumentation.js";
+
+// Initialize tracing before any other imports that might create spans
+initializeTracing();
 import express from "express";
 import { createBot } from "./bot.js";
 import { closeConnection, testConnection } from "../../db/client.js";
@@ -121,6 +128,7 @@ async function shutdown(signal: string) {
   console.log(`\n${signal} received. Shutting down...`);
   stopReminderNotifications();
   stopVoiceCallNotifications();
+  await shutdownTracing();
   // Don't delete webhook - new instance will set it on startup
   // Deleting here causes a race condition during deploys
   await closeConnection();

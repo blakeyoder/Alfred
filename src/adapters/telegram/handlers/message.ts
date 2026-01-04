@@ -1,6 +1,7 @@
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { ModelMessage } from "ai";
+import { trace, context as otelContext } from "@opentelemetry/api";
 import { chat } from "../../../agent/index.js";
 import { getUserByTelegramId } from "../../../db/queries/telegram.js";
 import {
@@ -79,57 +80,84 @@ export function registerMessageHandlers(bot: Telegraf): void {
 
     let typingInterval: ReturnType<typeof setInterval> | undefined;
 
+    // Create a parent span for request-level tracing
+    const tracer = trace.getTracer("telegram-handler");
+    const span = tracer.startSpan("telegram.message", {
+      attributes: {
+        "telegram.chat_id": ctx.chat.id,
+        "telegram.message_id": ctx.message.message_id,
+        "telegram.user_id": telegramId,
+        "telegram.chat_type": chatType,
+        "alfred.user_id": user.id,
+        "alfred.thread_id": session.threadId,
+      },
+    });
+
     try {
-      // Show typing indicator (refresh every 4s since it expires after 5s)
-      typingInterval = setInterval(() => {
-        ctx.sendChatAction("typing").catch(() => {});
-      }, 4000);
-      await ctx.sendChatAction("typing");
+      await otelContext.with(
+        trace.setSpan(otelContext.active(), span),
+        async () => {
+          // Show typing indicator (refresh every 4s since it expires after 5s)
+          typingInterval = setInterval(() => {
+            ctx.sendChatAction("typing").catch(() => {});
+          }, 4000);
+          await ctx.sendChatAction("typing");
 
-      // Load conversation history
-      const dbMessages = await getRecentMessagesForContext(
-        session.threadId,
-        50
-      );
-      const history: ModelMessage[] = dbMessages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map(dbMessageToModelMessage);
+          // Load conversation history
+          const dbMessages = await getRecentMessagesForContext(
+            session.threadId,
+            50
+          );
+          const history: ModelMessage[] = dbMessages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map(dbMessageToModelMessage);
 
-      // Call the agent
-      console.log(`[bot] Calling chat() for user ${user.id}...`);
-      const chatStartTime = Date.now();
-      const result = await chat(messageText, {
-        context: session.context,
-        history,
-        partnerId: session.partnerId,
-      });
-      console.log(`[bot] chat() completed in ${Date.now() - chatStartTime}ms`);
+          // Call the agent
+          console.log(`[bot] Calling chat() for user ${user.id}...`);
+          const chatStartTime = Date.now();
+          const result = await chat(messageText, {
+            context: session.context,
+            history,
+            partnerId: session.partnerId,
+          });
+          console.log(
+            `[bot] chat() completed in ${Date.now() - chatStartTime}ms`
+          );
 
-      // Stop typing indicator
-      clearInterval(typingInterval);
+          // Add response attributes to span
+          span.setAttribute("alfred.response_length", result.text.length);
+          span.setAttribute(
+            "alfred.tool_calls_count",
+            result.toolCalls?.length ?? 0
+          );
 
-      // Save messages to DB
-      await saveMessage(session.threadId, "user", messageText, user.id);
-      await saveMessage(
-        session.threadId,
-        "assistant",
-        result.text,
-        undefined,
-        result.toolCalls
-      );
+          // Stop typing indicator
+          clearInterval(typingInterval);
 
-      // Send response (split if too long)
-      // Convert markdown to Telegram HTML for reliable formatting
-      const telegramHtml = markdownToTelegramHtml(result.text);
-      const chunks = splitMessage(telegramHtml);
-      for (const chunk of chunks) {
-        try {
-          await ctx.reply(chunk, { parse_mode: "HTML" });
-        } catch {
-          // Fall back to plain text if HTML parsing fails
-          await ctx.reply(chunk.replace(/<[^>]+>/g, ""));
+          // Save messages to DB
+          await saveMessage(session.threadId, "user", messageText, user.id);
+          await saveMessage(
+            session.threadId,
+            "assistant",
+            result.text,
+            undefined,
+            result.toolCalls
+          );
+
+          // Send response (split if too long)
+          // Convert markdown to Telegram HTML for reliable formatting
+          const telegramHtml = markdownToTelegramHtml(result.text);
+          const chunks = splitMessage(telegramHtml);
+          for (const chunk of chunks) {
+            try {
+              await ctx.reply(chunk, { parse_mode: "HTML" });
+            } catch {
+              // Fall back to plain text if HTML parsing fails
+              await ctx.reply(chunk.replace(/<[^>]+>/g, ""));
+            }
+          }
         }
-      }
+      );
     } catch (error) {
       if (typingInterval) clearInterval(typingInterval);
       console.error("[bot] Error processing message:", error);
@@ -139,6 +167,8 @@ export function registerMessageHandlers(bot: Telegraf): void {
       } else {
         await ctx.reply("Sorry, something went wrong. Please try again.");
       }
+    } finally {
+      span.end();
     }
   });
 
