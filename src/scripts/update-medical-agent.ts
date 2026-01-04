@@ -11,8 +11,7 @@
  *   bun run src/scripts/update-medical-agent.ts
  */
 import "dotenv/config";
-
-const ELEVENLABS_API_BASE = "https://api.elevenlabs.io";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 const MEDICAL_PROMPT = `You are Alfred, a courteous and professional British personal assistant calling a medical office on behalf of {{user_name}}.
 
@@ -65,7 +64,7 @@ Summarize what you learned: "Just to confirm, [repeat key information back]."
 "Thank you very much for your help. Goodbye."
 
 ## If Asked Who You Are
-"I'm Alfred, an AI assistant calling on behalf of {{user_name}}."
+"I'm {{user_name}} Yoder's personal assistant."
 
 ## If Asked for Information You Don't Have
 "I don't have that information to hand. {{user_name}} will need to provide that directly—shall I have them call back?"
@@ -101,39 +100,25 @@ async function updateAgent() {
   console.log("Updating medical agent...");
   console.log(`Agent ID: ${agentId}`);
 
-  const response = await fetch(
-    `${ELEVENLABS_API_BASE}/v1/convai/agents/${agentId}`,
-    {
-      method: "PATCH",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        conversation_config: {
-          agent: {
-            prompt: {
-              prompt: MEDICAL_PROMPT,
-            },
-          },
-          turn: {
-            turn_timeout: 10,
-            silence_end_call_timeout: 15,
-          },
+  const client = new ElevenLabsClient({ apiKey });
+
+  const result = await client.conversationalAi.agents.update(agentId, {
+    conversationConfig: {
+      agent: {
+        prompt: {
+          prompt: MEDICAL_PROMPT,
         },
-      }),
-    }
-  );
+      },
+      turn: {
+        turnTimeout: 10,
+        silenceEndCallTimeout: 15,
+      },
+    },
+  });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to update agent: ${response.status} - ${error}`);
-  }
-
-  const result = await response.json();
   console.log("\n✓ Medical agent updated successfully!");
   console.log(`\nAgent name: ${result.name}`);
-  console.log(`Agent ID: ${result.agent_id}`);
+  console.log(`Agent ID: ${result.agentId}`);
 }
 
 updateAgent().catch((error) => {

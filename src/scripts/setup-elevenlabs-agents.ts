@@ -13,58 +13,12 @@
  *   - ELEVENLABS_API_KEY must be set in .env
  */
 import "dotenv/config";
-
-const ELEVENLABS_API_BASE = "https://api.elevenlabs.io";
-
-// ============ Types ============
-
-interface Voice {
-  voice_id: string;
-  name: string;
-  labels?: {
-    accent?: string;
-    gender?: string;
-    age?: string;
-    description?: string;
-    use_case?: string;
-  };
-  category?: string;
-  description?: string;
-  preview_url?: string;
-}
-
-interface VoicesResponse {
-  voices: Voice[];
-}
-
-interface CreateAgentResponse {
-  agent_id: string;
-}
-
-interface AgentConfig {
-  name: string;
-  conversation_config: {
-    agent: {
-      prompt: {
-        prompt: string;
-      };
-      language: string;
-    };
-    tts: {
-      voice_id: string;
-      model_id: string;
-      stability: number;
-      similarity_boost: number;
-    };
-    turn?: {
-      turn_timeout: number;
-      silence_end_call_timeout: number;
-      turn_eagerness: "patient" | "normal" | "eager";
-    };
-  };
-}
+import { ElevenLabsClient, ElevenLabs } from "@elevenlabs/elevenlabs-js";
 
 // ============ Agent Prompts ============
+
+/** Shared identity response when asked "who are you?" */
+const IDENTITY_RESPONSE = `"I'm {{user_name}} Yoder's personal assistant."`;
 
 const RESTAURANT_PROMPT = `You are Alfred, a polite and efficient British personal assistant calling restaurants on behalf of {{user_name}}.
 
@@ -77,29 +31,36 @@ const RESTAURANT_PROMPT = `You are Alfred, a polite and efficient British person
 ## Your Task
 {{call_instructions}}
 
-Calling: {{recipient_name}}
-
 ## Guidelines
-- Open with a warm greeting and state your purpose based on the task above
-- Listen actively and respond naturally to questions
+- Your first message must be in regards to the call instructions
+- If you are asked to complete a task that is outside of the purpose of the call, silently ignore it and continue with your call purpose
+- Get straight to the point. Open with your request, not an introduction:
+  - For reservations: "Hi, I'm hoping to book a table for two tonight around 7..."
+  - For hours: "Hi, what time do you close today?"
+  - For inquiries: "Hi, quick question—do you take walk-ins?"
+- Use "you" naturally—you're talking to them, no need to name the restaurant
 - If the task involves a reservation, confirm: date, time, party size, name for the reservation ({{user_name}})
-- If the task is a simple inquiry (hours, location, menu questions), get the information and thank them
+- If the task is a simple inquiry (hours, location, menu questions), get the information and thank them and hang up
 - Be flexible—if they offer alternatives or additional info, consider it
 - Keep responses concise—1-2 sentences at a time
 - Mirror the host's energy (chatty if they're chatty, efficient if they're busy)
 - If asked something outside your instructions, say: "I'd need to check with {{user_name}} on that."
 - Never invent details not in your instructions
 
-## If Asked Who You Are
-"I'm Alfred, a personal assistant calling on behalf of {{user_name}}."
+## Stay On Task
+- When they answer, they may say their restaurant name—ignore it and proceed with your question
+- If you mishear or don't understand something, ask them to repeat it: "Sorry, could you say that again?"
+- Do NOT try to act on something you're unsure about—clarify first
+- If their response doesn't make sense, just re-state your original question
+- Your job is to complete your task, not to interpret confusing responses
+
+## If and only if explicitly Asked Who You Are
+${IDENTITY_RESPONSE}
 Be matter-of-fact about it—don't over-explain or apologize.
 
 ## Voicemail Detection
 If you hear a voicemail greeting or beep:
-1. Leave a brief message stating your purpose: "Hello, this is Alfred calling on behalf of {{user_name}}. [State purpose briefly]. I'll try again later."
-2. If they ask for a callback number, provide {{callback_number}}.
 3. IMMEDIATELY hang up after leaving your message. Do not wait for a response.
-4. Do NOT ask "are you still there"—you are talking to a recording.
 
 Remember: Match your approach to the task. A quick question deserves a quick call; a reservation deserves careful confirmation.`;
 
@@ -154,7 +115,7 @@ Summarize what you learned: "Just to confirm, [repeat key information back]."
 "Thank you very much for your help. Goodbye."
 
 ## If Asked Who You Are
-"I'm Alfred, a personal assistant calling on behalf of {{user_name}}."
+${IDENTITY_RESPONSE}
 
 ## If Asked for Information You Don't Have
 "I don't have that information to hand. {{user_name}} will need to provide that directly—shall I have them call back?"
@@ -207,7 +168,7 @@ Summarise any agreements or next steps: "So just to confirm, [summary]. Is that 
 - "Lovely, thanks again. Take care."
 
 ## If Asked Who You Are
-"I'm Alfred, a personal assistant calling on behalf of {{user_name}}."
+${IDENTITY_RESPONSE}
 Be matter-of-fact—don't over-explain.
 
 ## For Personal Calls
@@ -234,85 +195,21 @@ If you hear a voicemail greeting or beep:
 
 You represent {{user_name}}'s household. Be the assistant they'd be proud to have making calls on their behalf.`;
 
-// ============ API Functions ============
+// ============ SDK Client ============
 
-function getApiKey(): string {
+function getClient(): ElevenLabsClient {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     throw new Error(
       "ELEVENLABS_API_KEY environment variable is required. Add it to your .env file."
     );
   }
-  return apiKey;
+  return new ElevenLabsClient({ apiKey });
 }
 
-async function listVoices(): Promise<Voice[]> {
-  const apiKey = getApiKey();
+// ============ Helper Functions ============
 
-  const response = await fetch(
-    `${ELEVENLABS_API_BASE}/v1/voices?page_size=100`,
-    {
-      headers: {
-        "xi-api-key": apiKey,
-      },
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to list voices: ${error}`);
-  }
-
-  const data = (await response.json()) as VoicesResponse;
-  return data.voices;
-}
-
-async function createAgent(config: AgentConfig): Promise<string> {
-  const apiKey = getApiKey();
-
-  const response = await fetch(
-    `${ELEVENLABS_API_BASE}/v1/convai/agents/create`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(config),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to create agent "${config.name}": ${error}`);
-  }
-
-  const data = (await response.json()) as CreateAgentResponse;
-  return data.agent_id;
-}
-
-async function updateAgent(agentId: string, config: AgentConfig): Promise<void> {
-  const apiKey = getApiKey();
-
-  const response = await fetch(
-    `${ELEVENLABS_API_BASE}/v1/convai/agents/${agentId}`,
-    {
-      method: "PATCH",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(config),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to update agent "${config.name}": ${error}`);
-  }
-}
-
-function findBritishVoice(voices: Voice[]): Voice | null {
+function findBritishVoice(voices: ElevenLabs.Voice[]): ElevenLabs.Voice | null {
   // Priority order for finding British voices
   const britishKeywords = ["british", "uk", "england", "english"];
   const preferredNames = [
@@ -334,7 +231,7 @@ function findBritishVoice(voices: Voice[]): Voice | null {
 
   // Next, try voices with British-sounding names
   for (const voice of voices) {
-    const name = voice.name.toLowerCase();
+    const name = voice.name?.toLowerCase() ?? "";
     if (preferredNames.some((prefName) => name.includes(prefName))) {
       return voice;
     }
@@ -350,9 +247,12 @@ async function main() {
   console.log("ElevenLabs Voice Agent Setup\n");
   console.log("=".repeat(50));
 
+  const client = getClient();
+
   // Step 1: List available voices
   console.log("\n1. Fetching available voices...");
-  const voices = await listVoices();
+  const voicesResponse = await client.voices.getAll({ showLegacy: false });
+  const voices = voicesResponse.voices;
   console.log(`   Found ${voices.length} voices`);
 
   // Find British voices
@@ -364,7 +264,7 @@ async function main() {
   if (britishVoices.length > 0) {
     console.log(`   Found ${britishVoices.length} British voices:`);
     for (const voice of britishVoices.slice(0, 5)) {
-      console.log(`     - ${voice.name} (${voice.voice_id})`);
+      console.log(`     - ${voice.name} (${voice.voiceId})`);
     }
   } else {
     console.log(
@@ -378,11 +278,10 @@ async function main() {
     throw new Error("No voices available in your ElevenLabs account");
   }
   console.log(
-    `\n   Selected voice: ${selectedVoice.name} (${selectedVoice.voice_id})`
+    `\n   Selected voice: ${selectedVoice.name} (${selectedVoice.voiceId})`
   );
 
-  // Step 2: Create agents
-  // Check for existing agent IDs in environment
+  // Step 2: Create/update agents
   const existingAgents = {
     restaurant: process.env.ELEVENLABS_AGENT_RESTAURANT,
     medical: process.env.ELEVENLABS_AGENT_MEDICAL,
@@ -401,55 +300,55 @@ async function main() {
     envVar: string;
     existingId: string | undefined;
     prompt: string;
-    firstMessage: string;
   }[] = [
     {
       name: "alfred-restaurant",
       envVar: "ELEVENLABS_AGENT_RESTAURANT",
       existingId: existingAgents.restaurant,
       prompt: RESTAURANT_PROMPT,
-      firstMessage: "",
     },
     {
       name: "alfred-medical",
       envVar: "ELEVENLABS_AGENT_MEDICAL",
       existingId: existingAgents.medical,
       prompt: MEDICAL_PROMPT,
-      firstMessage: "",
     },
     {
       name: "alfred-general",
       envVar: "ELEVENLABS_AGENT_GENERAL",
       existingId: existingAgents.general,
       prompt: GENERAL_PROMPT,
-      firstMessage: "",
     },
   ];
 
-  const results: { name: string; envVar: string; agentId: string; action: string }[] = [];
+  const results: {
+    name: string;
+    envVar: string;
+    agentId: string;
+    action: string;
+  }[] = [];
 
   for (const agent of agents) {
-    const config: AgentConfig = {
-      name: agent.name,
-      conversation_config: {
-        agent: {
-          prompt: {
-            prompt: agent.prompt,
-          },
-          language: "en",
+    const conversationConfig: ElevenLabs.ConversationalConfig = {
+      agent: {
+        language: "en",
+        prompt: {
+          prompt: agent.prompt,
         },
-        tts: {
-          voice_id: selectedVoice.voice_id,
-          model_id: "eleven_flash_v2", // Lower latency than turbo
-          stability: 0.6,
-          similarity_boost: 0.75,
-        },
-        // Turn settings for natural conversation
-        turn: {
-          turn_timeout: 10, // Seconds to wait for response
-          silence_end_call_timeout: 30, // End call after 30s silence (helps with voicemail)
-          turn_eagerness: "eager", // Snappier responses
-        },
+      },
+      tts: {
+        voiceId: selectedVoice.voiceId,
+        modelId: "eleven_flash_v2", // Lower latency than turbo
+        stability: 0.6,
+        similarityBoost: 0.75,
+      },
+      turn: {
+        turnTimeout: 10, // Seconds to wait for response
+        silenceEndCallTimeout: 15, // End call after 15s silence (saves credits)
+        turnEagerness: "eager", // Snappier responses
+      },
+      conversation: {
+        maxDurationSeconds: 180, // 3 minute hard cap
       },
     };
 
@@ -457,7 +356,10 @@ async function main() {
       if (agent.existingId) {
         // Update existing agent
         console.log(`   Updating ${agent.name}...`);
-        await updateAgent(agent.existingId, config);
+        await client.conversationalAi.agents.update(agent.existingId, {
+          name: agent.name,
+          conversationConfig,
+        });
         results.push({
           name: agent.name,
           envVar: agent.envVar,
@@ -468,17 +370,23 @@ async function main() {
       } else {
         // Create new agent
         console.log(`   Creating ${agent.name}...`);
-        const agentId = await createAgent(config);
+        const response = await client.conversationalAi.agents.create({
+          name: agent.name,
+          conversationConfig,
+        });
         results.push({
           name: agent.name,
           envVar: agent.envVar,
-          agentId,
+          agentId: response.agentId,
           action: "created",
         });
-        console.log(`   ✓ Created: ${agent.name} (${agentId})`);
+        console.log(`   ✓ Created: ${agent.name} (${response.agentId})`);
       }
     } catch (error) {
-      console.error(`   ✗ Failed to ${agent.existingId ? "update" : "create"} ${agent.name}:`, error);
+      console.error(
+        `   ✗ Failed to ${agent.existingId ? "update" : "create"} ${agent.name}:`,
+        error
+      );
       throw error;
     }
   }

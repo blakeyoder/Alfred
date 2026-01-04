@@ -1,15 +1,30 @@
 /**
  * ElevenLabs Conversational AI API client
- * https://elevenlabs.io/docs/api-reference
+ * Uses the official @elevenlabs/elevenlabs-js SDK
  */
+import { ElevenLabsClient, ElevenLabs } from "@elevenlabs/elevenlabs-js";
 import {
   getElevenLabsAgentId as getAgentIdFromConfig,
   type VoiceAgentType,
 } from "../lib/config.js";
 
-const ELEVENLABS_API_BASE = "https://api.elevenlabs.io";
+// ============ SDK Client ============
 
-// Re-export the type for consumers
+let client: ElevenLabsClient | null = null;
+
+function getClient(): ElevenLabsClient {
+  if (!client) {
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      throw new Error("ELEVENLABS_API_KEY environment variable is required");
+    }
+    client = new ElevenLabsClient({ apiKey });
+  }
+  return client;
+}
+
+// ============ Public API ============
+
 /**
  * Get the ElevenLabs agent ID for a specific voice agent type.
  * Falls back to general agent if the specific type is not configured.
@@ -18,7 +33,7 @@ export function getVoiceAgentId(agentType: VoiceAgentType): string {
   return getAgentIdFromConfig(agentType);
 }
 
-// ============ Types ============
+// ============ Types (maintained for backward compatibility) ============
 
 export interface OutboundCallRequest {
   agent_id: string;
@@ -80,62 +95,68 @@ export interface ConversationDetails {
   has_audio: boolean;
 }
 
-// ============ Client Implementation ============
+// ============ Response Mappers ============
 
-function getApiKey(): string {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    throw new Error("ELEVENLABS_API_KEY environment variable is required");
-  }
-  return apiKey;
-}
-
-async function makeElevenLabsRequest<TResponse>(
-  method: "GET" | "POST",
-  endpoint: string,
-  body?: unknown
-): Promise<TResponse> {
-  const apiKey = getApiKey();
-
-  const options: RequestInit = {
-    method,
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
+function mapOutboundCallResponse(
+  response: ElevenLabs.TwilioOutboundCallResponse
+): OutboundCallResponse {
+  return {
+    success: response.success,
+    message: response.message,
+    conversation_id: response.conversationId ?? null,
+    callSid: response.callSid ?? null,
   };
-
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
-
-  console.log(`[elevenlabs] ${method} ${endpoint}`);
-  if (body) {
-    console.log(
-      `[elevenlabs] Request body:`,
-      JSON.stringify(body).slice(0, 500)
-    );
-  }
-
-  const startTime = Date.now();
-  const response = await fetch(`${ELEVENLABS_API_BASE}${endpoint}`, options);
-  const elapsed = Date.now() - startTime;
-
-  console.log(`[elevenlabs] Response: ${response.status} (${elapsed}ms)`);
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error(`[elevenlabs] Error response:`, error);
-    throw new Error(`ElevenLabs API error (${response.status}): ${error}`);
-  }
-
-  const json = await response.json();
-  console.log(
-    `[elevenlabs] Response body:`,
-    JSON.stringify(json).slice(0, 500)
-  );
-  return json as TResponse;
 }
+
+function mapConversationDetails(
+  response: ElevenLabs.GetConversationResponseModel
+): ConversationDetails {
+  return {
+    agent_id: response.agentId,
+    conversation_id: response.conversationId,
+    status: response.status as ConversationStatus,
+    transcript: response.transcript.map((entry) => ({
+      role: entry.role as "user" | "agent",
+      message: entry.message ?? null,
+      time_in_call_secs: entry.timeInCallSecs,
+    })),
+    metadata: {
+      start_time_unix_secs: response.metadata.startTimeUnixSecs,
+      call_duration_secs: response.metadata.callDurationSecs,
+      termination_reason: response.metadata.terminationReason,
+      error: response.metadata.error
+        ? {
+            code: String(response.metadata.error.code),
+            reason: response.metadata.error.reason ?? "Unknown error",
+          }
+        : undefined,
+      phone_call: response.metadata.phoneCall
+        ? {
+            call_sid:
+              response.metadata.phoneCall.type === "twilio"
+                ? response.metadata.phoneCall.callSid
+                : undefined,
+          }
+        : undefined,
+    },
+    analysis: response.analysis
+      ? {
+          call_successful: response.analysis.callSuccessful as
+            | "success"
+            | "failure"
+            | "unknown",
+          transcript_summary: response.analysis.transcriptSummary,
+          call_summary_title: response.analysis.callSummaryTitle,
+          data_collection_results: response.analysis.dataCollectionResults as
+            | Record<string, unknown>
+            | undefined,
+        }
+      : undefined,
+    has_audio: response.hasAudio,
+  };
+}
+
+// ============ API Functions ============
 
 /**
  * Initiate an outbound phone call via Twilio
@@ -143,11 +164,42 @@ async function makeElevenLabsRequest<TResponse>(
 export async function initiateOutboundCall(
   request: OutboundCallRequest
 ): Promise<OutboundCallResponse> {
-  return makeElevenLabsRequest<OutboundCallResponse>(
-    "POST",
-    "/v1/convai/twilio/outbound-call",
-    request
+  const sdk = getClient();
+
+  console.log(`[elevenlabs] POST /v1/convai/twilio/outbound-call`);
+  console.log(
+    `[elevenlabs] Request:`,
+    JSON.stringify({
+      agentId: request.agent_id,
+      toNumber: request.to_number,
+      hasDynamicVars: !!request.conversation_initiation_client_data
+        ?.dynamic_variables,
+    })
   );
+
+  const startTime = Date.now();
+
+  const response = await sdk.conversationalAi.twilio.outboundCall({
+    agentId: request.agent_id,
+    agentPhoneNumberId: request.agent_phone_number_id,
+    toNumber: request.to_number,
+    conversationInitiationClientData:
+      request.conversation_initiation_client_data
+        ? {
+            userId: request.conversation_initiation_client_data.user_id,
+            dynamicVariables:
+              request.conversation_initiation_client_data.dynamic_variables,
+          }
+        : undefined,
+  });
+
+  const elapsed = Date.now() - startTime;
+  console.log(`[elevenlabs] Response: success=${response.success} (${elapsed}ms)`);
+  console.log(
+    `[elevenlabs] conversationId=${response.conversationId}, callSid=${response.callSid}`
+  );
+
+  return mapOutboundCallResponse(response);
 }
 
 /**
@@ -156,8 +208,15 @@ export async function initiateOutboundCall(
 export async function getConversationDetails(
   conversationId: string
 ): Promise<ConversationDetails> {
-  return makeElevenLabsRequest<ConversationDetails>(
-    "GET",
-    `/v1/convai/conversations/${conversationId}`
-  );
+  const sdk = getClient();
+
+  console.log(`[elevenlabs] GET /v1/convai/conversations/${conversationId}`);
+
+  const startTime = Date.now();
+  const response = await sdk.conversationalAi.conversations.get(conversationId);
+  const elapsed = Date.now() - startTime;
+
+  console.log(`[elevenlabs] Response: status=${response.status} (${elapsed}ms)`);
+
+  return mapConversationDetails(response);
 }
