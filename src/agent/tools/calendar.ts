@@ -3,13 +3,17 @@ import { z } from "zod";
 import {
   getEvents,
   createEvent,
+  updateEvent,
+  deleteEvent,
   findFreeTime,
-  formatEvents,
+  type CalendarEvent,
 } from "../../integrations/google-calendar.js";
 import { hasGoogleAuth } from "../../integrations/google-auth.js";
 import { getSharedCalendarId } from "../../db/queries/couples.js";
-import { storeMemories } from "../../integrations/mem0-provider.js";
+import { storeToolContextMemories } from "../../integrations/mem0-provider.js";
 import type { ToolContext } from "./reminders.js";
+
+const DEFAULT_TIMEZONE = "America/New_York";
 
 const getCalendarEventsSchema = z.object({
   startDate: z.iso.date().describe("Start date (YYYY-MM-DD)"),
@@ -26,77 +30,142 @@ const findFreeTimeSchema = z.object({
     .describe("Minimum duration in minutes"),
 });
 
-const createCalendarEventSchema = z.object({
-  title: z.string().describe("Event title/summary"),
-  startTime: z.iso.datetime().describe("Start time (ISO datetime)"),
-  endTime: z.iso.datetime().describe("End time (ISO datetime)"),
-  description: z.string().optional().describe("Event description"),
-  location: z.string().optional().describe("Event location"),
-  whose: z
-    .enum(["me", "partner", "both", "shared"])
+const createCalendarEventSchema = z
+  .object({
+    title: z.string().describe("Event title/summary"),
+    allDay: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Whether this is an all-day event (no specific times)"),
+    startDate: z.iso
+      .date()
+      .optional()
+      .describe("Start date for all-day events (YYYY-MM-DD)"),
+    endDate: z.iso
+      .date()
+      .optional()
+      .describe(
+        "End date for all-day events (YYYY-MM-DD, exclusive - use the day after the last day)"
+      ),
+    startTime: z.iso
+      .datetime()
+      .optional()
+      .describe(
+        "Start time for timed events. MUST be Eastern Time with offset, e.g. 2024-01-15T14:00:00-05:00 (EST) or -04:00 (EDT)"
+      ),
+    endTime: z.iso
+      .datetime()
+      .optional()
+      .describe(
+        "End time for timed events. MUST be Eastern Time with offset, e.g. 2024-01-15T15:00:00-05:00 (EST) or -04:00 (EDT)"
+      ),
+    description: z.string().optional().describe("Event description"),
+    location: z.string().optional().describe("Event location"),
+    whose: z
+      .enum(["me", "partner", "both", "shared"])
+      .optional()
+      .default("shared")
+      .describe(
+        "Where to add the event: 'shared' (default) uses the couple's shared calendar, 'me'/'partner'/'both' adds to individual calendars"
+      ),
+  })
+  .refine(
+    (data) => {
+      if (data.allDay) {
+        return data.startDate && data.endDate;
+      }
+      return data.startTime && data.endTime;
+    },
+    {
+      message:
+        "All-day events require startDate and endDate; timed events require startTime and endTime",
+    }
+  );
+
+const updateCalendarEventSchema = z.object({
+  eventId: z
+    .string()
+    .describe("The event ID to update (from getCalendarEvents)"),
+  title: z.string().optional().describe("New event title/summary"),
+  startTime: z.iso
+    .datetime()
     .optional()
-    .default("shared")
     .describe(
-      "Where to add the event: 'shared' (default) uses the couple's shared calendar, 'me'/'partner'/'both' adds to individual calendars"
+      "New start time. MUST be Eastern Time with offset, e.g. 2024-01-15T14:00:00-05:00"
     ),
+  endTime: z.iso
+    .datetime()
+    .optional()
+    .describe(
+      "New end time. MUST be Eastern Time with offset, e.g. 2024-01-15T15:00:00-05:00"
+    ),
+  description: z.string().optional().describe("New event description"),
+  location: z.string().optional().describe("New event location"),
+});
+
+const deleteCalendarEventSchema = z.object({
+  eventId: z
+    .string()
+    .describe("The event ID to delete (from getCalendarEvents)"),
 });
 
 /**
- * Extract memorable information from calendar event titles
- * Uses mem0 provider for storage
+ * Format a CalendarEvent for LLM consumption with ID and structured data.
  */
-async function extractCalendarMemories(
+function formatEventForLLM(event: CalendarEvent): {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  location?: string;
+  description?: string;
+} {
+  const formatTime = (dt?: string, d?: string): string => {
+    if (dt) {
+      return new Date(dt).toLocaleString("en-US", {
+        timeZone: DEFAULT_TIMEZONE,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+    return d ?? "";
+  };
+
+  return {
+    id: event.id,
+    summary: event.summary,
+    start: formatTime(event.start.dateTime, event.start.date),
+    end: formatTime(event.end.dateTime, event.end.date),
+    ...(event.location && { location: event.location }),
+    ...(event.description && { description: event.description }),
+  };
+}
+
+/**
+ * Store calendar event context for memory extraction.
+ * Passes raw event context to mem0 and lets its LLM decide what's memorable
+ * based on the includes/excludes/custom_instructions configuration.
+ */
+async function storeCalendarEventContext(
   title: string,
   ctx: ToolContext
 ): Promise<void> {
-  // Extract meeting context from title patterns
-  const meetingPatterns = [
-    { pattern: /meeting with (.+)/i, type: "meeting" as const },
-    { pattern: /call with (.+)/i, type: "call" as const },
-    { pattern: /appointment with (.+)/i, type: "appointment" as const },
-    { pattern: /(.+) appointment/i, type: "appointment" as const },
-    { pattern: /lunch with (.+)/i, type: "lunch" as const },
-    { pattern: /dinner with (.+)/i, type: "dinner" as const },
-    { pattern: /(.+) birthday/i, type: "birthday" as const },
-  ];
-
-  for (const { pattern, type } of meetingPatterns) {
-    const match = title.match(pattern);
-    if (match) {
-      const person = match[1].trim();
-      // Skip generic terms
-      if (
-        !["doctor", "dentist", "therapist", "vet", "the"].includes(
-          person.toLowerCase()
-        )
-      ) {
-        const content =
-          type === "birthday"
-            ? `${person}'s birthday is an important date`
-            : `Has ${type} scheduled with ${person}`;
-        const category = type === "birthday" ? "relationship" : "context";
-
-        try {
-          // Store via mem0 provider with metadata
-          await storeMemories(
-            [
-              { role: "user", content: `Created calendar event: ${title}` },
-              { role: "assistant", content: `I'll remember: ${content}` },
-            ],
-            ctx.session.coupleId,
-            {
-              user_id: ctx.session.userId,
-              source_thread_id: ctx.session.threadId,
-              source_visibility: ctx.session.visibility,
-              category,
-            }
-          );
-        } catch (error) {
-          console.error("[calendar] Failed to store memory:", error);
-        }
+  try {
+    await storeToolContextMemories(
+      `Created calendar event: "${title}"`,
+      ctx.session.coupleId,
+      {
+        user_id: ctx.session.userId,
+        source_thread_id: ctx.session.threadId,
+        source_visibility: ctx.session.visibility,
       }
-      break;
-    }
+    );
+  } catch (error) {
+    console.error("[calendar] Failed to store event context:", error);
   }
 }
 
@@ -146,7 +215,7 @@ export function createCalendarTools(
             success: true,
             dateRange: { startDate, endDate },
             totalEvents: events.length,
-            events: formatEvents(events),
+            events: events.map(formatEventForLLM),
           };
         } catch (error) {
           return {
@@ -229,16 +298,41 @@ export function createCalendarTools(
     }),
 
     createCalendarEvent: tool({
-      description: "Create a calendar event",
+      description:
+        "Create a calendar event. All times are Eastern Time (America/New_York). " +
+        "For timed events, use ISO format with Eastern offset: -05:00 (EST winter) or -04:00 (EDT summer). " +
+        "Example: 2pm on Jan 15 = 2024-01-15T14:00:00-05:00",
       inputSchema: createCalendarEventSchema,
       execute: async ({
         title,
+        allDay,
+        startDate,
+        endDate,
         startTime,
         endTime,
         description,
         location,
         whose = "shared",
       }) => {
+        // Build the event input based on whether it's all-day or timed
+        const eventInput = allDay
+          ? {
+              allDay: true as const,
+              summary: title,
+              description,
+              startDate: startDate!,
+              endDate: endDate!,
+              location,
+            }
+          : {
+              allDay: false as const,
+              summary: title,
+              description,
+              startTime: startTime!,
+              endTime: endTime!,
+              location,
+            };
+
         // Handle shared calendar case
         if (whose === "shared") {
           const sharedCalendarId = await getSharedCalendarId(
@@ -267,20 +361,12 @@ export function createCalendarTools(
           try {
             const event = await createEvent(
               ctx.session.userId,
-              {
-                summary: title,
-                description,
-                startTime,
-                endTime,
-                location,
-              },
+              eventInput,
               sharedCalendarId
             );
 
-            // Extract memories from calendar event (fire and forget)
-            extractCalendarMemories(title, ctx).catch((err) =>
-              console.error("[calendar] Memory extraction failed:", err)
-            );
+            // Store event context for memory extraction (fire and forget)
+            storeCalendarEventContext(title, ctx);
 
             return {
               success: true,
@@ -349,19 +435,11 @@ export function createCalendarTools(
           }
 
           try {
-            const event = await createEvent(userId, {
-              summary: title,
-              description,
-              startTime,
-              endTime,
-              location,
-            });
+            const event = await createEvent(userId, eventInput);
 
-            // Extract memories from calendar event (fire and forget, only for current user)
+            // Store event context for memory extraction (fire and forget, only for current user)
             if (isCurrentUser) {
-              extractCalendarMemories(title, ctx).catch((err) =>
-                console.error("[calendar] Memory extraction failed:", err)
-              );
+              storeCalendarEventContext(title, ctx);
             }
 
             results.push({
@@ -393,6 +471,114 @@ export function createCalendarTools(
               : "Failed to create any events",
           results,
         };
+      },
+    }),
+
+    updateCalendarEvent: tool({
+      description:
+        "Update an existing calendar event. Use getCalendarEvents first to get the event ID. " +
+        "Only provide the fields you want to change.",
+      inputSchema: updateCalendarEventSchema,
+      execute: async ({
+        eventId,
+        title,
+        startTime,
+        endTime,
+        description,
+        location,
+      }) => {
+        const sharedCalendarId = await getSharedCalendarId(
+          ctx.session.coupleId
+        );
+
+        if (!sharedCalendarId) {
+          return {
+            success: false,
+            message:
+              "No shared calendar configured. Use /calendar list to see available calendars and /calendar set <id> to set one.",
+          };
+        }
+
+        const hasAuth = await hasGoogleAuth(ctx.session.userId);
+        if (!hasAuth) {
+          return {
+            success: false,
+            message:
+              "You need to connect Google Calendar first. Use /auth to connect.",
+          };
+        }
+
+        try {
+          const updates = {
+            ...(title && { summary: title }),
+            ...(description !== undefined && { description }),
+            ...(location !== undefined && { location }),
+            ...(startTime && { startTime }),
+            ...(endTime && { endTime }),
+          };
+
+          const updatedEvent = await updateEvent(
+            ctx.session.userId,
+            eventId,
+            updates,
+            sharedCalendarId
+          );
+
+          return {
+            success: true,
+            message: `Updated event "${updatedEvent.summary}"`,
+            event: formatEventForLLM(updatedEvent),
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message:
+              error instanceof Error ? error.message : "Failed to update event",
+          };
+        }
+      },
+    }),
+
+    deleteCalendarEvent: tool({
+      description:
+        "Delete a calendar event. Use getCalendarEvents first to get the event ID.",
+      inputSchema: deleteCalendarEventSchema,
+      execute: async ({ eventId }) => {
+        const sharedCalendarId = await getSharedCalendarId(
+          ctx.session.coupleId
+        );
+
+        if (!sharedCalendarId) {
+          return {
+            success: false,
+            message:
+              "No shared calendar configured. Use /calendar list to see available calendars and /calendar set <id> to set one.",
+          };
+        }
+
+        const hasAuth = await hasGoogleAuth(ctx.session.userId);
+        if (!hasAuth) {
+          return {
+            success: false,
+            message:
+              "You need to connect Google Calendar first. Use /auth to connect.",
+          };
+        }
+
+        try {
+          await deleteEvent(ctx.session.userId, eventId, sharedCalendarId);
+
+          return {
+            success: true,
+            message: "Event deleted successfully",
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message:
+              error instanceof Error ? error.message : "Failed to delete event",
+          };
+        }
       },
     }),
   };
