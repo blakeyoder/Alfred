@@ -1,4 +1,5 @@
 import { encrypt, decrypt } from "./crypto.js";
+import { _resetConfigForTesting } from "./config.js";
 
 describe("encrypt/decrypt", () => {
   const originalEnv = process.env.ENCRYPTION_KEY;
@@ -8,10 +9,12 @@ describe("encrypt/decrypt", () => {
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
   beforeEach(() => {
+    _resetConfigForTesting();
     process.env.ENCRYPTION_KEY = TEST_KEY;
   });
 
   afterEach(() => {
+    _resetConfigForTesting();
     if (originalEnv) {
       process.env.ENCRYPTION_KEY = originalEnv;
     } else {
@@ -76,9 +79,8 @@ describe("encrypt/decrypt", () => {
   describe("missing ENCRYPTION_KEY", () => {
     it("throws when ENCRYPTION_KEY is missing on encrypt", () => {
       delete process.env.ENCRYPTION_KEY;
-      expect(() => encrypt("test")).toThrow(
-        "ENCRYPTION_KEY environment variable is required"
-      );
+      _resetConfigForTesting();
+      expect(() => encrypt("test")).toThrow("ENCRYPTION_KEY");
     });
 
     it("throws when ENCRYPTION_KEY is missing on decrypt", () => {
@@ -87,26 +89,23 @@ describe("encrypt/decrypt", () => {
 
       // Then try to decrypt without key
       delete process.env.ENCRYPTION_KEY;
-      expect(() => decrypt(encrypted)).toThrow(
-        "ENCRYPTION_KEY environment variable is required"
-      );
+      _resetConfigForTesting();
+      expect(() => decrypt(encrypted)).toThrow("ENCRYPTION_KEY");
     });
   });
 
   describe("invalid ENCRYPTION_KEY length", () => {
     it("throws when key is too short", () => {
       process.env.ENCRYPTION_KEY = "0123456789abcdef"; // 16 chars = 8 bytes
-      expect(() => encrypt("test")).toThrow(
-        "ENCRYPTION_KEY must be 32 bytes (64 hex chars)"
-      );
+      _resetConfigForTesting();
+      expect(() => encrypt("test")).toThrow("64 hex characters");
     });
 
     it("throws when key is too long", () => {
       // Append valid hex chars to make 36 bytes (72 hex chars)
       process.env.ENCRYPTION_KEY = TEST_KEY + "deadbeef";
-      expect(() => encrypt("test")).toThrow(
-        "ENCRYPTION_KEY must be 32 bytes (64 hex chars)"
-      );
+      _resetConfigForTesting();
+      expect(() => encrypt("test")).toThrow("64 hex characters");
     });
   });
 
@@ -167,6 +166,7 @@ describe("encrypt/decrypt", () => {
       // Change to different valid key
       process.env.ENCRYPTION_KEY =
         "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+      _resetConfigForTesting();
 
       expect(() => decrypt(encrypted)).toThrow();
     });

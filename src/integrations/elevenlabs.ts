@@ -172,8 +172,8 @@ export async function initiateOutboundCall(
     JSON.stringify({
       agentId: request.agent_id,
       toNumber: request.to_number,
-      hasDynamicVars: !!request.conversation_initiation_client_data
-        ?.dynamic_variables,
+      hasDynamicVars:
+        !!request.conversation_initiation_client_data?.dynamic_variables,
     })
   );
 
@@ -194,7 +194,9 @@ export async function initiateOutboundCall(
   });
 
   const elapsed = Date.now() - startTime;
-  console.log(`[elevenlabs] Response: success=${response.success} (${elapsed}ms)`);
+  console.log(
+    `[elevenlabs] Response: success=${response.success} (${elapsed}ms)`
+  );
   console.log(
     `[elevenlabs] conversationId=${response.conversationId}, callSid=${response.callSid}`
   );
@@ -216,7 +218,9 @@ export async function getConversationDetails(
   const response = await sdk.conversationalAi.conversations.get(conversationId);
   const elapsed = Date.now() - startTime;
 
-  console.log(`[elevenlabs] Response: status=${response.status} (${elapsed}ms)`);
+  console.log(
+    `[elevenlabs] Response: status=${response.status} (${elapsed}ms)`
+  );
 
   return mapConversationDetails(response);
 }

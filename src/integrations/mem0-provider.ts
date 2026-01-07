@@ -60,6 +60,28 @@ export async function storeMemories(
 }
 
 /**
+ * Store context from tool actions (calendar events, voice calls, etc.)
+ * Passes raw context to mem0 and lets its LLM handle extraction
+ * based on includes/excludes/custom_instructions.
+ *
+ * This is the preferred pattern for storing memories from tool actions.
+ * Do NOT pre-process or regex-extract content before calling this.
+ */
+export async function storeToolContextMemories(
+  context: string,
+  coupleId: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  // Format as a conversation so mem0 can extract relevant facts
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+    { role: "user", content: context },
+    { role: "assistant", content: "Noted." },
+  ];
+
+  await storeMemories(messages, coupleId, metadata);
+}
+
+/**
  * Search memories semantically
  */
 export async function searchMemoriesForCouple(

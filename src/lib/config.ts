@@ -83,6 +83,15 @@ function getConfig(): Environment {
   return config;
 }
 
+/**
+ * Reset the cached configuration.
+ * Only for use in tests that need to modify env vars.
+ * @internal
+ */
+export function _resetConfigForTesting(): void {
+  config = null;
+}
+
 // ============================================================================
 // Typed getters for specific config values
 // ============================================================================
