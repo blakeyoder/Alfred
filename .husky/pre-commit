@@ -1,0 +1,8 @@
+# Lint and format staged files
+bun run lint-staged
+
+# Typecheck the entire project
+bun run typecheck
+
+# Check for unused exports/dependencies
+bun run knip --fix

@@ -2,5 +2,6 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": ["src/adapters/telegram/server.ts", "src/scripts/*.ts"],
   "project": ["src/**/*.ts"],
-  "ignore": ["dist/**"]
+  "ignore": ["dist/**"],
+  "ignoreDependencies": ["lint-staged"]
 }

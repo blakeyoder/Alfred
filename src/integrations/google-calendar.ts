@@ -3,7 +3,53 @@ import { getValidAccessToken } from "./google-auth.js";
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 const DEFAULT_TIMEZONE = "America/New_York";
 
-interface CalendarEvent {
+/**
+ * Check if a given date falls within Daylight Saving Time for Eastern timezone.
+ */
+function isEasternDST(datePart: string): boolean {
+  const testDate = new Date(`${datePart}T12:00:00Z`);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: DEFAULT_TIMEZONE,
+    timeZoneName: "short",
+  });
+  const formatted = formatter.format(testDate);
+  return formatted.includes("EDT");
+}
+
+/**
+ * Interpret a datetime string as Eastern Time.
+ *
+ * LLMs often output ISO datetimes with Z suffix (UTC) when they actually mean
+ * the local time the user specified. For example, if a user says "7pm", the LLM
+ * might output "2024-01-15T19:00:00Z" meaning "7pm" but technically that's 7pm UTC.
+ *
+ * This function interprets such times as Eastern Time:
+ * - If the input has Z suffix, treat the time portion as Eastern and add correct offset
+ * - If the input already has an offset, return as-is
+ *
+ * @param isoString - ISO datetime string (e.g., "2024-01-15T19:00:00Z" or "2024-01-15T19:00:00-05:00")
+ * @returns ISO datetime string with Eastern Time offset
+ */
+export function interpretAsEastern(isoString: string): string {
+  // If already has a timezone offset (not Z), return as-is
+  if (!isoString.endsWith("Z") && /[+-]\d{2}:\d{2}$/.test(isoString)) {
+    return isoString;
+  }
+
+  // Strip the Z suffix and any milliseconds - we want to treat the time as-is (not as UTC)
+  const cleanedString = isoString.replace(/(\.\d+)?Z$/, "");
+
+  // Extract date and time parts
+  const [datePart, timePart = "00:00:00"] = cleanedString.split("T");
+  const cleanTimePart = timePart.split(".")[0]; // Remove any remaining milliseconds
+
+  // Determine the correct offset based on whether DST is in effect
+  const offset = isEasternDST(datePart) ? "-04:00" : "-05:00";
+
+  return `${datePart}T${cleanTimePart}${offset}`;
+}
+
+export interface CalendarEvent {
   id: string;
   summary: string;
   description?: string;
@@ -30,14 +76,40 @@ export interface CalendarListEntry {
   backgroundColor?: string;
 }
 
-interface CreateEventInput {
+export type CreateEventInput = {
   summary: string;
   description?: string;
-  startTime: string; // ISO datetime
-  endTime: string; // ISO datetime
   location?: string;
   attendees?: string[]; // email addresses
-}
+} & (
+  | {
+      allDay: true;
+      startDate: string; // YYYY-MM-DD
+      endDate: string; // YYYY-MM-DD (exclusive - day after last day)
+    }
+  | {
+      allDay?: false;
+      startTime: string; // ISO datetime
+      endTime: string; // ISO datetime
+    }
+);
+
+export type UpdateEventInput = {
+  summary?: string;
+  description?: string;
+  location?: string;
+} & (
+  | {
+      allDay: true;
+      startDate: string; // YYYY-MM-DD
+      endDate: string; // YYYY-MM-DD (exclusive)
+    }
+  | {
+      allDay?: false;
+      startTime?: string; // ISO datetime
+      endTime?: string; // ISO datetime
+    }
+);
 
 interface TimeSlot {
   start: string;
@@ -111,14 +183,18 @@ export async function createEvent(
   const body = {
     summary: event.summary,
     description: event.description,
-    start: {
-      dateTime: event.startTime,
-      timeZone: DEFAULT_TIMEZONE,
-    },
-    end: {
-      dateTime: event.endTime,
-      timeZone: DEFAULT_TIMEZONE,
-    },
+    start: event.allDay
+      ? { date: event.startDate }
+      : {
+          dateTime: interpretAsEastern(event.startTime),
+          timeZone: DEFAULT_TIMEZONE,
+        },
+    end: event.allDay
+      ? { date: event.endDate }
+      : {
+          dateTime: interpretAsEastern(event.endTime),
+          timeZone: DEFAULT_TIMEZONE,
+        },
     location: event.location,
     attendees: event.attendees?.map((email) => ({ email })),
   };
@@ -131,6 +207,85 @@ export async function createEvent(
       body: JSON.stringify(body),
     }
   );
+}
+
+/**
+ * Update an existing calendar event.
+ * Only provided fields will be updated.
+ */
+export async function updateEvent(
+  userId: string,
+  eventId: string,
+  updates: UpdateEventInput,
+  calendarId = "primary"
+): Promise<CalendarEvent> {
+  const body: Record<string, unknown> = {};
+
+  if (updates.summary !== undefined) {
+    body.summary = updates.summary;
+  }
+  if (updates.description !== undefined) {
+    body.description = updates.description;
+  }
+  if (updates.location !== undefined) {
+    body.location = updates.location;
+  }
+
+  if (updates.allDay) {
+    body.start = { date: updates.startDate };
+    body.end = { date: updates.endDate };
+  } else {
+    if (updates.startTime !== undefined) {
+      body.start = {
+        dateTime: interpretAsEastern(updates.startTime),
+        timeZone: DEFAULT_TIMEZONE,
+      };
+    }
+    if (updates.endTime !== undefined) {
+      body.end = {
+        dateTime: interpretAsEastern(updates.endTime),
+        timeZone: DEFAULT_TIMEZONE,
+      };
+    }
+  }
+
+  return makeCalendarRequest<CalendarEvent>(
+    userId,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+/**
+ * Delete a calendar event.
+ */
+export async function deleteEvent(
+  userId: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<void> {
+  const accessToken = await getValidAccessToken(userId);
+  if (!accessToken) {
+    throw new Error(
+      "Not authenticated with Google. Use /auth google to connect."
+    );
+  }
+
+  const url = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Google Calendar API error: ${error}`);
+  }
 }
 
 /**
@@ -249,22 +404,6 @@ export async function findFreeTime(
   }
 
   return freeSlots.slice(0, 10); // Return top 10 slots
-}
-
-/**
- * Format events for display.
- */
-export function formatEvents(events: CalendarEvent[]): string[] {
-  return events.map((e) => {
-    const startTime = e.start.dateTime
-      ? new Date(e.start.dateTime).toLocaleString()
-      : e.start.date;
-    const endTime = e.end.dateTime
-      ? new Date(e.end.dateTime).toLocaleTimeString()
-      : "";
-
-    return `${startTime}${endTime ? ` - ${endTime}` : ""}: ${e.summary}`;
-  });
 }
 
 /**
