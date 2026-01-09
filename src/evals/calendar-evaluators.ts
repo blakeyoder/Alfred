@@ -4,11 +4,7 @@
  * These evaluate whether the LLM correctly constructs tool calls
  * from natural language input.
  */
-
-interface ToolCall {
-  toolName: string;
-  args: Record<string, unknown>;
-}
+import type { LLMOutput, EvaluatorResult } from "./types.js";
 
 interface EvaluatorInput {
   input: {
@@ -16,21 +12,12 @@ interface EvaluatorInput {
     currentDate: string;
     currentTime: string;
   };
-  output: {
-    toolCalls: ToolCall[];
-    text: string;
-  };
+  output: LLMOutput;
   expectedOutput: {
     shouldCallTool: boolean;
     toolName?: string;
     shouldBeAllDay?: boolean;
   };
-}
-
-interface EvaluatorResult {
-  name: string;
-  value: number;
-  comment?: string;
 }
 
 /**

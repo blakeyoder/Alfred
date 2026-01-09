@@ -12,12 +12,14 @@ import {
   getRecentMessagesForContext,
   saveMessage,
 } from "../../../db/queries/messages.js";
+import { getRecentCompletedCall } from "../../../db/queries/voice-calls.js";
 import {
   buildSessionContext,
   dbMessageToModelMessage,
   splitMessage,
   markdownToTelegramHtml,
 } from "./utils.js";
+import { scoreProductionTrace } from "../../../services/trace-scoring.js";
 
 /**
  * Register message handlers: text messages and non-text messages
@@ -130,6 +132,36 @@ export function registerMessageHandlers(bot: Telegraf): void {
             "alfred.tool_calls_count",
             result.toolCalls?.length ?? 0
           );
+
+          // Score the trace for quality monitoring (fire and forget)
+          const traceId = span.spanContext().traceId;
+          if (process.env.LANGFUSE_SCORING_ENABLED === "true") {
+            // Check for recent call result to include in scoring context
+            const recentCall = await getRecentCompletedCall(
+              session.context.coupleId,
+              30
+            );
+
+            scoreProductionTrace(
+              {
+                traceId,
+                message: messageText,
+                ...(recentCall && {
+                  callResult: {
+                    toName: recentCall.to_name ?? recentCall.to_number,
+                    summary: recentCall.summary ?? "",
+                    outcome: recentCall.outcome ?? "unknown",
+                  },
+                }),
+              },
+              {
+                text: result.text,
+                toolCalls: result.toolCalls,
+              }
+            ).catch((err) =>
+              console.error("[bot] Failed to score trace:", err)
+            );
+          }
 
           // Stop typing indicator
           clearInterval(typingInterval);

@@ -3,6 +3,7 @@
  */
 import { tool } from "ai";
 import { z } from "zod";
+import { trace, SpanStatusCode } from "@opentelemetry/api";
 import type { ToolContext } from "./reminders.js";
 import {
   initiateOutboundCall,
@@ -15,6 +16,8 @@ import {
   updateVoiceCallFailed,
 } from "../../db/queries/voice-calls.js";
 import { getUserById } from "../../db/queries/users.js";
+
+const tracer = trace.getTracer("alfred-voice-calls");
 
 // E.164 format: + followed by 1-15 digits
 // More permissive than just US numbers
@@ -79,131 +82,168 @@ export function createVoiceCallTools(
         instructions,
         dynamicVariables,
       }) => {
-        console.log(
-          `[voice-call] Tool invoked: ${agentType} call to ${toName} at ${toNumber}`
-        );
-        console.log(`[voice-call] Purpose: ${callPurpose}`);
-        console.log(
-          `[voice-call] Instructions: ${instructions.slice(0, 100)}...`
-        );
-
-        try {
-          console.log(`[voice-call] Starting call setup...`);
-          const phoneNumberId = getPhoneNumberId();
-          console.log(`[voice-call] Phone number ID: ${phoneNumberId}`);
-          const agentId = getVoiceAgentId(agentType);
-          console.log(`[voice-call] Using agent ID: ${agentId}`);
-
-          // Get user info for dynamic variables
+        return tracer.startActiveSpan("initiateVoiceCall", async (span) => {
           console.log(
-            `[voice-call] Fetching user info for ${ctx.session.userId}...`
+            `[voice-call] Tool invoked: ${agentType} call to ${toName} at ${toNumber}`
           );
-          const user = await getUserById(ctx.session.userId);
-          console.log(`[voice-call] User: ${user?.name ?? "unknown"}`);
-          const userName = user?.name ?? "your assistant";
-          const callbackNumber = user?.phone_number ?? null;
-          const userEmail = user?.email ?? null;
-
-          // Create database record first (pending status)
-          console.log(`[voice-call] Creating database record...`);
-          const voiceCall = await createVoiceCall(
-            ctx.session.coupleId,
-            ctx.session.userId,
-            agentType,
-            callPurpose,
-            toNumber,
-            instructions,
-            {
-              toName,
-              dynamicVariables: {
-                user_name: userName,
-                call_instructions: instructions,
-                ...(callbackNumber && { callback_number: callbackNumber }),
-                ...(userEmail && { email: userEmail }),
-                ...dynamicVariables,
-              },
-            }
+          console.log(`[voice-call] Purpose: ${callPurpose}`);
+          console.log(
+            `[voice-call] Instructions: ${instructions.slice(0, 100)}...`
           );
 
-          console.log(`[voice-call] Database record created: ${voiceCall.id}`);
+          // Add span attributes for debugging phone number issues
+          span.setAttributes({
+            "voice_call.to_name": toName,
+            "voice_call.to_number": toNumber,
+            "voice_call.agent_type": agentType,
+            "voice_call.call_purpose": callPurpose,
+            "voice_call.user_id": ctx.session.userId,
+            "voice_call.couple_id": ctx.session.coupleId,
+          });
 
-          // Initiate the call via ElevenLabs
-          console.log(`[voice-call] Initiating ElevenLabs API call...`);
-          let response: OutboundCallResponse;
           try {
-            response = await initiateOutboundCall({
-              agent_id: agentId,
-              agent_phone_number_id: phoneNumberId,
-              to_number: toNumber,
-              conversation_initiation_client_data: {
-                user_id: ctx.session.userId,
-                dynamic_variables: {
+            console.log(`[voice-call] Starting call setup...`);
+            const phoneNumberId = getPhoneNumberId();
+            console.log(`[voice-call] Phone number ID: ${phoneNumberId}`);
+            const agentId = getVoiceAgentId(agentType);
+            console.log(`[voice-call] Using agent ID: ${agentId}`);
+
+            // Get user info for dynamic variables
+            console.log(
+              `[voice-call] Fetching user info for ${ctx.session.userId}...`
+            );
+            const user = await getUserById(ctx.session.userId);
+            console.log(`[voice-call] User: ${user?.name ?? "unknown"}`);
+            const userName = user?.name ?? "your assistant";
+            const callbackNumber = user?.phone_number ?? null;
+            const userEmail = user?.email ?? null;
+
+            // Create database record first (pending status)
+            console.log(`[voice-call] Creating database record...`);
+            const voiceCall = await createVoiceCall(
+              ctx.session.coupleId,
+              ctx.session.userId,
+              agentType,
+              callPurpose,
+              toNumber,
+              instructions,
+              {
+                toName,
+                dynamicVariables: {
                   user_name: userName,
                   call_instructions: instructions,
-                  recipient_name: toName,
-                  agent_type: agentType,
-                  call_purpose: callPurpose,
                   ...(callbackNumber && { callback_number: callbackNumber }),
                   ...(userEmail && { email: userEmail }),
                   ...dynamicVariables,
                 },
-              },
-            });
-          } catch (apiError) {
-            // API call failed - mark record as failed
-            const errorMessage =
-              apiError instanceof Error ? apiError.message : "Unknown error";
-            console.error(`[voice-call] API error: ${errorMessage}`);
-            await updateVoiceCallFailed(voiceCall.id, errorMessage);
-            return {
-              success: false,
-              message: `Failed to initiate call: ${errorMessage}`,
-              callId: voiceCall.id,
-            };
-          }
-
-          console.log(`[voice-call] API call completed successfully`);
-          console.log(`[voice-call] API response:`, JSON.stringify(response));
-
-          if (!response.success || !response.conversation_id) {
-            console.log(
-              `[voice-call] API returned failure or no conversation_id`
+              }
             );
-            // API returned failure - mark record as failed
-            const errorMessage =
-              response.message || "No conversation ID returned";
-            await updateVoiceCallFailed(voiceCall.id, errorMessage);
+
+            console.log(
+              `[voice-call] Database record created: ${voiceCall.id}`
+            );
+            span.setAttribute("voice_call.call_id", voiceCall.id);
+
+            // Initiate the call via ElevenLabs
+            console.log(`[voice-call] Initiating ElevenLabs API call...`);
+            let response: OutboundCallResponse;
+            try {
+              response = await initiateOutboundCall({
+                agent_id: agentId,
+                agent_phone_number_id: phoneNumberId,
+                to_number: toNumber,
+                conversation_initiation_client_data: {
+                  user_id: ctx.session.userId,
+                  dynamic_variables: {
+                    user_name: userName,
+                    call_instructions: instructions,
+                    recipient_name: toName,
+                    agent_type: agentType,
+                    call_purpose: callPurpose,
+                    ...(callbackNumber && { callback_number: callbackNumber }),
+                    ...(userEmail && { email: userEmail }),
+                    ...dynamicVariables,
+                  },
+                },
+              });
+            } catch (apiError) {
+              // API call failed - mark record as failed
+              const errorMessage =
+                apiError instanceof Error ? apiError.message : "Unknown error";
+              console.error(`[voice-call] API error: ${errorMessage}`);
+              await updateVoiceCallFailed(voiceCall.id, errorMessage);
+              span.setStatus({
+                code: SpanStatusCode.ERROR,
+                message: errorMessage,
+              });
+              span.end();
+              return {
+                success: false,
+                message: `Failed to initiate call: ${errorMessage}`,
+                callId: voiceCall.id,
+              };
+            }
+
+            console.log(`[voice-call] API call completed successfully`);
+            console.log(`[voice-call] API response:`, JSON.stringify(response));
+
+            if (!response.success || !response.conversation_id) {
+              console.log(
+                `[voice-call] API returned failure or no conversation_id`
+              );
+              // API returned failure - mark record as failed
+              const errorMessage =
+                response.message || "No conversation ID returned";
+              await updateVoiceCallFailed(voiceCall.id, errorMessage);
+              span.setStatus({
+                code: SpanStatusCode.ERROR,
+                message: errorMessage,
+              });
+              span.end();
+              return {
+                success: false,
+                message: `Failed to initiate call: ${errorMessage}`,
+                callId: voiceCall.id,
+              };
+            }
+
+            // Update record with ElevenLabs IDs
+            console.log(
+              `[voice-call] Updating database with conversation_id: ${response.conversation_id}`
+            );
+            await updateVoiceCallInitiated(
+              voiceCall.id,
+              response.conversation_id,
+              response.callSid
+            );
+
+            span.setAttributes({
+              "voice_call.conversation_id": response.conversation_id,
+              "voice_call.call_sid": response.callSid ?? "",
+            });
+
+            console.log(`[voice-call] Call successfully initiated!`);
+            span.setStatus({ code: SpanStatusCode.OK });
+            span.end();
+            return {
+              success: true,
+              message: `Call initiated to ${toName} at ${toNumber}. I'll notify you when the call completes.`,
+              callId: voiceCall.id,
+              conversationId: response.conversation_id,
+            };
+          } catch (error) {
+            console.error("[voice-call] Error initiating call:", error);
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+            span.end();
             return {
               success: false,
-              message: `Failed to initiate call: ${errorMessage}`,
-              callId: voiceCall.id,
+              message: `Error initiating call: ${error instanceof Error ? error.message : "Unknown error"}`,
             };
           }
-
-          // Update record with ElevenLabs IDs
-          console.log(
-            `[voice-call] Updating database with conversation_id: ${response.conversation_id}`
-          );
-          await updateVoiceCallInitiated(
-            voiceCall.id,
-            response.conversation_id,
-            response.callSid
-          );
-
-          console.log(`[voice-call] Call successfully initiated!`);
-          return {
-            success: true,
-            message: `Call initiated to ${toName} at ${toNumber}. I'll notify you when the call completes.`,
-            callId: voiceCall.id,
-            conversationId: response.conversation_id,
-          };
-        } catch (error) {
-          console.error("[voice-call] Error initiating call:", error);
-          return {
-            success: false,
-            message: `Error initiating call: ${error instanceof Error ? error.message : "Unknown error"}`,
-          };
-        }
+        });
       },
     }),
   };

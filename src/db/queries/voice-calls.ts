@@ -173,3 +173,26 @@ export async function getStalledCalls(
       AND started_at < NOW() - INTERVAL '1 minute' * ${maxAgeMinutes}
   `;
 }
+
+/**
+ * Get the most recent completed call for a couple.
+ * Used for scoring to check if user is asking about a call result.
+ *
+ * @param coupleId - The couple's ID
+ * @param maxAgeMinutes - Only return calls completed within this time window
+ */
+export async function getRecentCompletedCall(
+  coupleId: string,
+  maxAgeMinutes = 30
+): Promise<VoiceCall | null> {
+  const rows = await sql<VoiceCall[]>`
+    SELECT * FROM voice_calls
+    WHERE couple_id = ${coupleId}
+      AND status IN ('done', 'failed')
+      AND completed_at IS NOT NULL
+      AND completed_at > NOW() - INTERVAL '1 minute' * ${maxAgeMinutes}
+    ORDER BY completed_at DESC
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}

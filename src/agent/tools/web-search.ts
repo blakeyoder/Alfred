@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { trace, SpanStatusCode, type Span } from "@opentelemetry/api";
 import {
   search,
   extract,
@@ -7,6 +8,60 @@ import {
   type SearchResult,
 } from "../../integrations/parallel.js";
 import type { ToolContext } from "./reminders.js";
+
+const tracer = trace.getTracer("alfred-web-search");
+
+// ============ Phone Number Detection ============
+
+/**
+ * Patterns that indicate a query is looking for a phone number.
+ */
+const PHONE_QUERY_PATTERNS = [
+  /phone\s*number/i,
+  /call\s+/i,
+  /contact/i,
+  /\btel\b/i,
+  /reach\s+(them|us)/i,
+];
+
+/**
+ * Regex to extract phone numbers from text.
+ */
+const PHONE_NUMBER_REGEX =
+  /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/g;
+
+/**
+ * Check if a query is looking for a phone number.
+ */
+function isPhoneNumberQuery(query: string): boolean {
+  return PHONE_QUERY_PATTERNS.some((pattern) => pattern.test(query));
+}
+
+/**
+ * Extract phone numbers from text.
+ */
+function extractPhoneNumbers(text: string): string[] {
+  const matches = text.match(PHONE_NUMBER_REGEX);
+  return matches ? [...new Set(matches)] : [];
+}
+
+/**
+ * Add phone number lookup attributes to a span.
+ */
+function addPhoneSpanAttributes(
+  span: Span,
+  query: string,
+  results: string[],
+  foundNumbers: string[]
+): void {
+  span.setAttributes({
+    "phone_lookup.query": query,
+    "phone_lookup.is_phone_query": isPhoneNumberQuery(query),
+    "phone_lookup.results_count": results.length,
+    "phone_lookup.found_numbers": foundNumbers.join(", "),
+    "phone_lookup.found_number_count": foundNumbers.length,
+  });
+}
 
 // ============ Schemas ============
 
@@ -143,56 +198,85 @@ export function createWebSearchTools(
         "If the query is location-specific and no location is provided, ask the user.",
       inputSchema: webSearchSchema,
       execute: async ({ query, location, maxResults = 5 }) => {
-        try {
-          // Enhance query with location if provided
-          const objective = location ? `${query} near ${location}` : query;
+        return tracer.startActiveSpan("webSearch", async (span) => {
+          try {
+            // Enhance query with location if provided
+            const objective = location ? `${query} near ${location}` : query;
 
-          // Build search queries - for restaurant queries, add explicit
-          // queries for preferred sources to weight them higher
-          const searchQueries: string[] = [];
-          if (isRestaurantQuery(query)) {
-            for (const source of RESTAURANT_PREFERRED_SOURCES) {
-              searchQueries.push(`site:${source} ${objective}`);
+            span.setAttributes({
+              "web_search.query": query,
+              "web_search.objective": objective,
+              "web_search.location": location ?? "",
+              "web_search.max_results": maxResults,
+            });
+
+            // Build search queries - for restaurant queries, add explicit
+            // queries for preferred sources to weight them higher
+            const searchQueries: string[] = [];
+            if (isRestaurantQuery(query)) {
+              for (const source of RESTAURANT_PREFERRED_SOURCES) {
+                searchQueries.push(`site:${source} ${objective}`);
+              }
             }
-          }
 
-          const response = await search({
-            objective,
-            search_queries:
-              searchQueries.length > 0 ? searchQueries : undefined,
-            max_results: maxResults,
-            excerpts: {
-              max_chars_per_result: 500,
-            },
-            source_policy: {
-              exclude_domains: EXCLUDED_DOMAINS,
-            },
-          });
+            const response = await search({
+              objective,
+              search_queries:
+                searchQueries.length > 0 ? searchQueries : undefined,
+              max_results: maxResults,
+              excerpts: {
+                max_chars_per_result: 500,
+              },
+              source_policy: {
+                exclude_domains: EXCLUDED_DOMAINS,
+              },
+            });
 
-          if (response.results.length === 0) {
+            // Track phone number lookups for debugging
+            const allExcerpts = response.results
+              .map((r) => r.excerpts?.join(" ") ?? "")
+              .filter(Boolean);
+            const foundNumbers = extractPhoneNumbers(allExcerpts.join(" "));
+            addPhoneSpanAttributes(span, objective, allExcerpts, foundNumbers);
+
+            if (response.results.length === 0) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              span.end();
+              return {
+                success: true,
+                message: "No results found for your search.",
+                results: [],
+              };
+            }
+
+            span.setAttributes({
+              "web_search.result_count": response.results.length,
+            });
+            span.setStatus({ code: SpanStatusCode.OK });
+            span.end();
+
             return {
               success: true,
-              message: "No results found for your search.",
+              query: objective,
+              resultCount: response.results.length,
+              results: response.results.map(formatSearchResult),
+            };
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+            span.end();
+            return {
+              success: false,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to perform web search",
               results: [],
             };
           }
-
-          return {
-            success: true,
-            query: objective,
-            resultCount: response.results.length,
-            results: response.results.map(formatSearchResult),
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message:
-              error instanceof Error
-                ? error.message
-                : "Failed to perform web search",
-            results: [],
-          };
-        }
+        });
       },
     }),
 
@@ -236,36 +320,59 @@ export function createWebSearchTools(
         "Returns the answer with citations. Prefer this over webSearch for simple factual lookups.",
       inputSchema: webAnswerSchema,
       execute: async ({ question }) => {
-        try {
-          const response = await chatWithContext({
-            model: "speed",
-            messages: [
-              {
-                role: "user",
-                content: question,
-              },
-            ],
-            max_tokens: 500,
-            temperature: 0.1,
-          });
+        return tracer.startActiveSpan("webAnswer", async (span) => {
+          try {
+            span.setAttributes({
+              "web_answer.question": question,
+              "web_answer.is_phone_query": isPhoneNumberQuery(question),
+            });
 
-          const answer = response.choices[0]?.message?.content ?? "";
+            const response = await chatWithContext({
+              model: "speed",
+              messages: [
+                {
+                  role: "user",
+                  content: question,
+                },
+              ],
+              max_tokens: 500,
+              temperature: 0.1,
+            });
 
-          return {
-            success: true,
-            question,
-            answer,
-            tokensUsed: response.usage.total_tokens,
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message:
-              error instanceof Error
-                ? error.message
-                : "Failed to answer question",
-          };
-        }
+            const answer = response.choices[0]?.message?.content ?? "";
+
+            // Track phone numbers found in the answer
+            const foundNumbers = extractPhoneNumbers(answer);
+            addPhoneSpanAttributes(span, question, [answer], foundNumbers);
+
+            span.setAttributes({
+              "web_answer.answer_length": answer.length,
+              "web_answer.tokens_used": response.usage.total_tokens,
+            });
+            span.setStatus({ code: SpanStatusCode.OK });
+            span.end();
+
+            return {
+              success: true,
+              question,
+              answer,
+              tokensUsed: response.usage.total_tokens,
+            };
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+            span.end();
+            return {
+              success: false,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to answer question",
+            };
+          }
+        });
       },
     }),
   };
